@@ -1,5 +1,5 @@
 entrypoint = "main.dart"
-modules = ["dart-3.3"]
+modules = ["dart-3.3", "python-3.11"]
 
 [nix]
 channel="stable-24_05"
@@ -11,3 +11,31 @@ deploymentTarget = "cloudrun"
 
 [agent]
 expertMode = true
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Flutter Web App"
+
+[[workflows.workflow]]
+name = "Flutter Web App"
+author = "agent"
+
+[workflows.workflow.metadata]
+outputType = "webview"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd eyesea_reporting_2 && flutter build web --release && cd build/web && python -m http.server 5000 --bind 0.0.0.0"
+waitForPort = 5000
+
+[[ports]]
+localPort = 5000
+externalPort = 80
