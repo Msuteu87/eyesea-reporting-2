@@ -41,9 +41,28 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>We need camera access to let you capture evidence of pollution.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>We need your location to map where the pollution is reported.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>We need photo library access to upload evidence from your gallery.</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>io.supabase.eyesea</string>
+			</array>
+		</dict>
+	</array>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>MBXAccessToken</key>
+	<string>pk.eyJ1IjoibXN1dGV1IiwiYSI6ImNtNzM0dDBkczA2ZzYya3BrZ3BxYWNreTgifQ.FsItpMoNlqDQymznw00lSw</string>
 </dict>
 </plist>

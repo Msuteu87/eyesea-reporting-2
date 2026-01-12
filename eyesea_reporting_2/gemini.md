@@ -2,6 +2,37 @@
 
 This document provides comprehensive guidelines and best practices for developing the "Eyesea Reporting 2" application using Flutter (Dart), Supabase as the backend, and incorporating robust offline capabilities. Adhering to these principles will ensure a maintainable, scalable, and secure application.
 
+---
+
+## Current Implementation Status
+
+| Feature | Status |
+|---------|--------|
+| Clean Architecture | ✅ Implemented |
+| Supabase Auth | ✅ Implemented |
+| Use Cases Layer | ✅ Implemented |
+| Split Data Sources | ✅ Implemented |
+| Data Models | ✅ Implemented |
+| Theme System (Light/Dark) | ✅ Implemented |
+| SSO Placeholder | ✅ Placeholder Added |
+| Reports CRUD | 🟡 Data source only |
+| Offline Mode | ⬜ Not started |
+
+### Environment Setup
+
+1. Copy `lib/core/secrets.dart.example` to `lib/core/secrets.dart`
+2. Add your Supabase credentials:
+   ```dart
+   class Secrets {
+     static const String supabaseUrl = 'YOUR_URL';
+     static const String supabaseAnonKey = 'YOUR_KEY';
+   }
+   ```
+3. Run `flutter pub get`
+4. Run `flutter run -d web-server --web-port 5001`
+
+---
+
 ## 1. Project Setup and Dependencies
 
 ### 1.1 Flutter Initialization

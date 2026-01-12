@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none">
+  <!-- Map with phone icon -->
+  <!-- Map background with terrain lines -->
+  <rect x="4" y="4" width="40" height="40" rx="4" stroke="currentColor" stroke-width="2.5"/>
+  <path d="M4 16h12l8-8 8 8h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity="0.3"/>
+  <path d="M4 28h16l4-4 4 4h16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity="0.3"/>
+  <path d="M4 38h8l6-6 6 6 6-6 6 6h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity="0.3"/>
+  <!-- Phone device -->
+  <rect x="18" y="14" width="12" height="22" rx="2" fill="white" stroke="currentColor" stroke-width="2"/>
+  <rect x="20" y="17" width="8" height="14" rx="1" stroke="currentColor" stroke-width="1.5" opacity="0.6"/>
+  <!-- Location pin on phone screen -->
+  <circle cx="24" cy="22" r="2" fill="currentColor"/>
+  <path d="M24 20v-2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+  <!-- Phone home button -->
+  <circle cx="24" cy="33" r="1.5" stroke="currentColor" stroke-width="1"/>
+</svg>

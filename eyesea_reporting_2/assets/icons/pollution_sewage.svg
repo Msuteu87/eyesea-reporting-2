@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none">
+  <!-- Sewage pollution icon - pipe with drip -->
+  <path d="M8 18h14c4 0 6 2 6 6v12" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M8 26h10c2 0 4 2 4 4v8" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="34" cy="14" r="6" stroke="currentColor" stroke-width="2.5"/>
+  <path d="M34 10v8M30 14h8" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.6"/>
+  <path d="M28 36c0 2 2 4 4 4s4-2 4-4c0-2-4-6-4-6s-4 4-4 6z" fill="currentColor" opacity="0.3" stroke="currentColor" stroke-width="2"/>
+</svg>

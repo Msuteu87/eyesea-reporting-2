@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none">
+  <!-- Anchor icon - marine themed -->
+  <circle cx="24" cy="10" r="4" stroke="currentColor" stroke-width="2.5"/>
+  <path d="M24 14v28" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M16 18h16" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M8 36c0-8 8-14 16-14s16 6 16 14" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+  <path d="M8 36h4M36 36h4" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+</svg>

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none">
+  <!-- Camera permission icon -->
+  <rect x="6" y="14" width="36" height="26" rx="4" stroke="currentColor" stroke-width="2.5"/>
+  <circle cx="24" cy="27" r="8" stroke="currentColor" stroke-width="2.5"/>
+  <circle cx="24" cy="27" r="3" fill="currentColor"/>
+  <rect x="12" y="8" width="8" height="6" rx="1" stroke="currentColor" stroke-width="2" opacity="0.6"/>
+  <circle cx="36" cy="20" r="2" fill="currentColor" opacity="0.5"/>
+</svg>
