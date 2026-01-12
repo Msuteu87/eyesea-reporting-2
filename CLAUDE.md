@@ -70,6 +70,7 @@ lib/
 - **Manual Dependency Injection**: All dependencies are wired in `main.dart` and passed via `MultiProvider`.
 - **Offline-First**: Reports queue locally in Hive, sync when connectivity restored via `ReportQueueService`.
 - **On-Device AI**: YOLO model runs locally for privacy. iOS uses CoreML (`.mlpackage`), Android uses TFLite.
+- **Client-Side Security**: Never rely solely on client-side validation. All critical validation and business logic must happen in Supabase (RLS, database functions, or Edge Functions).
 
 ### Data Flow for Reports
 
@@ -95,9 +96,10 @@ Auth-guarded routes redirect through `/splash` → `/login` → `/onboarding` �
 
 ### Critical Rules
 
-- **No Docker/Local Supabase**: Always use hosted Supabase (`https://[project-ref].supabase.co`).
+- **No Docker/Local Supabase**: Always use hosted Supabase (`https://[project-ref].supabase.co`). Do not suggest `docker compose` or `supabase start`.
 - **RLS Required**: Every table must have Row Level Security policies. Never leave tables open.
 - **Migrations**: Located in `eyesea_reporting_2/supabase/migrations/`. Use `supabase db pull` and `supabase migration new`.
+- **Destructive Operations**: Ask for confirmation before suggesting `DELETE` or `TRUNCATE`.
 
 ### Key Tables
 
@@ -129,9 +131,14 @@ Mapbox token is in `android/app/src/main/AndroidManifest.xml` and iOS `Info.plis
 - **iOS Model**: `ios/yolo11n.mlpackage/` (CoreML)
 - **Android Model**: `android/app/src/main/assets/*.tflite`
 - **Confidence Threshold**: 0.25
-- **Privacy Protection**: Blocks submission if people detected in image
+- **Privacy-First**: All AI processing happens on-device. No images sent to external APIs.
 
 ### Detection Categories
+
+- **People Detection**: Blocks submission if people detected (privacy protection)
+- **Pollution Items**: Bottles, cups, bags, debris, fishing gear, containers
+- **Scene Context**: Beach, outdoor, water for better categorization
+- **Multi-Category**: Can detect multiple pollution types per image
 
 Maps YOLO classes to `PollutionType` enum: plastic, oil, debris, sewage, fishingGear, container, other.
 
@@ -139,11 +146,20 @@ Maps YOLO classes to `PollutionType` enum: plastic, oil, debris, sewage, fishing
 
 - **Font**: Space Grotesk via `google_fonts`
 - **Icons**: Lucide Icons (`lucide_icons` package)
-- **Colors**: 60-30-10 rule (Neutral/Secondary/Accent)
-- **Logging**: Use `AppLogger` from `core/utils/logger.dart`, never `print()`
+- **Colors**: 60-30-10 rule (60% Neutral, 30% Secondary, 10% Accent) using `ColorScheme.fromSeed`
+- **Theme**: Centralized `ThemeData` with Light/Dark/System support
+- **Logging**: Use `dart:developer` `log()`, never `print()`
 
 ## Report Status Flow
 
 `ReportStatus` enum: `pending` → `verified` → `resolved` (recovered) | `rejected`
 
 Markers: Blue for active (pending/verified), Green for resolved.
+
+## Dart Code Standards
+
+- **Null Safety**: Write soundly null-safe code. Avoid `!` unless guaranteed safe.
+- **Immutability**: Prefer immutable data structures. `StatelessWidget` must be immutable.
+- **Async**: Use `Future/await` for operations, `Stream` for events. Handle async errors with `try-catch`.
+- **Serialization**: `json_serializable` with `fieldRename: FieldRename.snake`
+- **Performance**: Use `const` constructors, `ListView.builder` for long lists, `compute()` for expensive tasks.

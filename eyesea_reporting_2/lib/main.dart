@@ -10,11 +10,13 @@ import 'core/services/report_queue_service.dart';
 import 'core/services/notification_service.dart';
 import 'data/datasources/auth_data_source.dart';
 import 'data/datasources/report_data_source.dart';
+import 'data/datasources/social_feed_data_source.dart';
 import 'data/repositories/auth_repository_impl.dart';
 import 'core/services/ai_analysis_service.dart';
 
 import 'presentation/providers/auth_provider.dart';
 import 'presentation/providers/reports_map_provider.dart';
+import 'presentation/providers/social_feed_provider.dart';
 import 'presentation/routes/app_router.dart';
 import 'data/datasources/organization_data_source.dart';
 import 'data/repositories/organization_repository_impl.dart';
@@ -88,6 +90,13 @@ Future<void> main() async {
     connectivityService,
   );
 
+  // Create social feed data source and provider
+  final socialFeedDataSource = SocialFeedDataSource(supabaseClient);
+  final socialFeedProvider = SocialFeedProvider(
+    socialFeedDataSource,
+    connectivityService,
+  );
+
   final appRouter = AppRouter(authProvider);
 
   runApp(
@@ -108,6 +117,9 @@ Future<void> main() async {
         ),
         ChangeNotifierProvider<ReportsMapProvider>.value(
           value: reportsMapProvider,
+        ),
+        ChangeNotifierProvider<SocialFeedProvider>.value(
+          value: socialFeedProvider,
         ),
       ],
       child: EyeseaApp(router: appRouter.router),

@@ -87,9 +87,9 @@ class MainShell extends StatelessWidget {
                           _buildNavItem(
                             context,
                             index: 3,
-                            icon: LucideIcons.barChart3,
-                            activeIcon: LucideIcons.barChart4,
-                            label: 'Impact',
+                            icon: LucideIcons.users,
+                            activeIcon: LucideIcons.users,
+                            label: 'Feed',
                             isSelected: currentIndex == 3,
                           ),
                           _buildNavItem(

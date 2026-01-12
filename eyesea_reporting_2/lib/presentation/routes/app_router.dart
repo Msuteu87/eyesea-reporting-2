@@ -7,7 +7,8 @@ import '../onboarding/onboarding_screen.dart';
 import '../profile/profile_screen.dart';
 import '../report/report_screen.dart';
 import '../report/camera_capture_screen.dart';
-import '../ambassador/analysis_screen.dart';
+import '../report/report_details_screen.dart';
+import '../social_feed/social_feed_screen.dart';
 import '../providers/auth_provider.dart';
 import '../navigation/main_shell.dart';
 import '../events/events_screen.dart';
@@ -123,13 +124,13 @@ class AppRouter {
                   ),
                 ],
               ),
-              // 4. Analysis / Community
+              // 4. Feed (Social Feed)
               StatefulShellBranch(
                 routes: [
                   GoRoute(
-                    path: '/analysis',
-                    name: 'analysis',
-                    builder: (context, state) => const AnalysisScreen(),
+                    path: '/feed',
+                    name: 'feed',
+                    builder: (context, state) => const SocialFeedScreen(),
                   ),
                 ],
               ),
@@ -196,6 +197,16 @@ class AppRouter {
             path: cameraCapture,
             name: 'camera-capture',
             builder: (context, state) => const CameraCaptureScreen(),
+          ),
+
+          // Report Details Route (after image capture)
+          GoRoute(
+            path: '/report-details',
+            name: 'report-details',
+            builder: (context, state) {
+              final imagePath = state.uri.queryParameters['imagePath'] ?? '';
+              return ReportDetailsScreen(imagePath: imagePath);
+            },
           ),
         ],
         errorBuilder: (context, state) => Scaffold(
