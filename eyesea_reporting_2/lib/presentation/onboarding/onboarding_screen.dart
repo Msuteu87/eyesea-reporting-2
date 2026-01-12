@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/services/notification_service.dart';
 import '../providers/auth_provider.dart';
 import '../legal/legal_viewer_screen.dart';
 import '../widgets/onboarding_animations.dart';
@@ -70,6 +71,15 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       buttonText: 'Enable Photo Access',
     ),
     OnboardingPageData(
+      title: 'Stay in the Loop',
+      description:
+          'Get notified when your reports are verified or when pollution you reported gets cleaned up.',
+      imagePath: 'assets/images/onboarding_notifications.png',
+      permission: Permission.notification,
+      buttonText: 'Enable Notifications',
+      isNotificationPage: true,
+    ),
+    OnboardingPageData(
       title: 'Terms & Conditions',
       description:
           'By using Eyesea, you agree to our Terms of Service and Privacy Policy. Tap to read the full documents.',
@@ -116,6 +126,24 @@ class _OnboardingScreenState extends State<OnboardingScreen>
 
     final pageIndexWhenCalled = _currentPage;
     final pageData = _pages[_currentPage];
+
+    // Handle notification page specially
+    if (pageData.isNotificationPage) {
+      final notificationService = context.read<NotificationService>();
+      final granted = await notificationService.checkPermission();
+      debugPrint('[Onboarding] Resume check: notification = $granted');
+
+      if (granted &&
+          _currentPage == pageIndexWhenCalled &&
+          !_isNavigating) {
+        setState(() {
+          _permissionGrantedStates[Permission.notification] = true;
+        });
+        await Future.delayed(const Duration(milliseconds: 800));
+        _goToNextPage();
+      }
+      return;
+    }
 
     if (pageData.permission != null) {
       final status = await pageData.permission!.status;
@@ -383,6 +411,8 @@ class _OnboardingScreenState extends State<OnboardingScreen>
         case Permission.storage:
         case Permission.mediaLibrary:
           iconData = Icons.photo_library_rounded;
+        case Permission.notification:
+          iconData = Icons.notifications_rounded;
         default:
           iconData = Icons.security_rounded;
       }
@@ -438,8 +468,26 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       return;
     }
 
+    // --- Notification Page: Use NotificationService instead of permission_handler ---
+    if (pageData.isNotificationPage && !kIsWeb) {
+      final notificationService = context.read<NotificationService>();
+      final granted = await notificationService.requestPermission();
+
+      debugPrint('[Onboarding] Notification permission: $granted');
+
+      // Mark as granted for animation (notifications are optional, so we proceed either way)
+      setState(() {
+        _permissionGrantedStates[Permission.notification] = granted;
+      });
+
+      // Short delay to show animation before advancing
+      await Future.delayed(const Duration(milliseconds: 800));
+      _goToNextPage();
+      return;
+    }
+
     // --- Permission Pages ---
-    if (pageData.permission != null && !kIsWeb) {
+    if (pageData.permission != null && !pageData.isNotificationPage && !kIsWeb) {
       final permission = pageData.permission!;
       final attempts = _permissionAttempts[permission] ?? 0;
 
@@ -516,6 +564,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     if (permission == Permission.camera) return 'Camera';
     if (permission == Permission.location) return 'Location';
     if (permission == Permission.photos) return 'Photo Library';
+    if (permission == Permission.notification) return 'Notifications';
     return 'Permission';
   }
 
@@ -566,6 +615,7 @@ class OnboardingPageData {
   final String buttonText;
   final bool isTermsPage;
   final bool isRegistrationPage;
+  final bool isNotificationPage;
 
   OnboardingPageData({
     required this.title,
@@ -575,5 +625,6 @@ class OnboardingPageData {
     required this.buttonText,
     this.isTermsPage = false,
     this.isRegistrationPage = false,
+    this.isNotificationPage = false,
   });
 }

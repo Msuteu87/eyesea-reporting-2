@@ -53,6 +53,13 @@ dependencies:
   camera: ^0.11.0
   photo_manager: ^3.3.0
   flutter_image_compress: ^2.3.0
+  hive_flutter: ^1.1.0
+  connectivity_plus: ^6.0.0
+  uuid: ^4.5.1
+  path_provider: ^2.1.5
+  geocoding: ^4.0.0
+  ultralytics_yolo: ^0.1.46
+  flutter_local_notifications: ^18.0.1
 
 dev_dependencies:
   flutter_test:

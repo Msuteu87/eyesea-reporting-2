@@ -29,8 +29,8 @@ class MainShell extends StatelessWidget {
       // The body contains the page content
       body: navigationShell,
       bottomNavigationBar: SizedBox(
-        // Extra height for FAB overflow
-        height: 56 + bottomPadding + 24,
+        // Height for nav bar with embedded center button
+        height: 56 + bottomPadding + 16,
         child: Stack(
           clipBehavior: Clip.none,
           alignment: Alignment.bottomCenter,
@@ -107,9 +107,9 @@ class MainShell extends StatelessWidget {
                 ),
               ),
             ),
-            // Floating center button (above the bar)
+            // Center button (embedded in the bar)
             Positioned(
-              bottom: bottomPadding + 20,
+              bottom: bottomPadding + 6,
               child: _buildCenterButton(context, currentIndex == 2),
             ),
           ],
@@ -124,8 +124,8 @@ class MainShell extends StatelessWidget {
     return GestureDetector(
       onTap: () => context.push('/camera-capture'),
       child: Container(
-        width: 60,
-        height: 60,
+        width: 56,
+        height: 56,
         decoration: BoxDecoration(
           color: primaryColor,
           shape: BoxShape.circle,
@@ -133,18 +133,12 @@ class MainShell extends StatelessWidget {
             color: Colors.white,
             width: 3,
           ),
-          boxShadow: [
-            BoxShadow(
-              color: primaryColor.withValues(alpha: 0.4),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
+          // No shadow for cleaner embedded look
         ),
         child: const Icon(
           LucideIcons.camera,
           color: Colors.white,
-          size: 28,
+          size: 26,
         ),
       ),
     );

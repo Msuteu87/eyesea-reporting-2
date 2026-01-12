@@ -1,13 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:provider/provider.dart';
 import 'app.dart';
 import 'core/secrets.dart';
 import 'core/utils/logger.dart';
+import 'core/services/connectivity_service.dart';
+import 'core/services/report_queue_service.dart';
+import 'core/services/notification_service.dart';
 import 'data/datasources/auth_data_source.dart';
+import 'data/datasources/report_data_source.dart';
 import 'data/repositories/auth_repository_impl.dart';
+import 'core/services/ai_analysis_service.dart';
 
 import 'presentation/providers/auth_provider.dart';
+import 'presentation/providers/reports_map_provider.dart';
 import 'presentation/routes/app_router.dart';
 import 'data/datasources/organization_data_source.dart';
 import 'data/repositories/organization_repository_impl.dart';
@@ -18,6 +25,10 @@ import 'domain/repositories/event_repository.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize Hive for offline storage
+  await Hive.initFlutter();
+  AppLogger.info('Hive initialized');
 
   // Prefer environment variables from command line, fallback to Secrets file
   const supabaseUrlEnv = String.fromEnvironment('SUPABASE_URL');
@@ -55,6 +66,28 @@ Future<void> main() async {
   final eventDataSource = EventDataSource(supabaseClient);
   final eventRepository = EventRepositoryImpl(eventDataSource, supabaseClient);
 
+  // Initialize connectivity and queue services
+  final connectivityService = ConnectivityService();
+  await connectivityService.initialize();
+
+  final reportDataSource = ReportDataSource(supabaseClient);
+  final reportQueueService =
+      ReportQueueService(reportDataSource, connectivityService);
+  await reportQueueService.initialize();
+
+  final aiAnalysisService = AIAnalysisService();
+
+  // Initialize notification service for realtime in-app notifications
+  final notificationService = NotificationService(supabaseClient);
+  await notificationService.initialize();
+
+  // Create reports map provider for displaying markers on the map
+  final reportsMapProvider = ReportsMapProvider(
+    reportDataSource,
+    reportQueueService,
+    connectivityService,
+  );
+
   final appRouter = AppRouter(authProvider);
 
   runApp(
@@ -63,6 +96,19 @@ Future<void> main() async {
         ChangeNotifierProvider.value(value: authProvider),
         Provider<OrganizationRepository>.value(value: orgRepository),
         Provider<EventRepository>.value(value: eventRepository),
+        Provider<ConnectivityService>.value(value: connectivityService),
+        Provider<ReportQueueService>.value(value: reportQueueService),
+        Provider<AIAnalysisService>(
+          create: (_) => aiAnalysisService,
+          dispose: (_, service) => service.dispose(),
+        ),
+        Provider<NotificationService>(
+          create: (_) => notificationService,
+          dispose: (_, service) => service.dispose(),
+        ),
+        ChangeNotifierProvider<ReportsMapProvider>.value(
+          value: reportsMapProvider,
+        ),
       ],
       child: EyeseaApp(router: appRouter.router),
     ),
