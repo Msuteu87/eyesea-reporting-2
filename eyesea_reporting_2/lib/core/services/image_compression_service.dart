@@ -6,7 +6,10 @@ import 'package:path_provider/path_provider.dart';
 /// Service for compressing images before upload to reduce bandwidth and storage.
 class ImageCompressionService {
   /// Compress an image file to reduce size.
-  /// Returns the compressed file.
+  /// Returns the compressed file stored in permanent app documents directory.
+  ///
+  /// Note: Images are stored in Documents/pending_images/ to survive
+  /// extended offline periods (won't be cleared by OS like cache).
   ///
   /// [imageFile] - The original image file
   /// [quality] - Compression quality (0-100), default 80
@@ -18,9 +21,17 @@ class ImageCompressionService {
     int maxWidth = 1920,
     int maxHeight = 1920,
   }) async {
-    final dir = await getTemporaryDirectory();
+    // Use app documents directory (permanent) instead of cache (can be cleared)
+    final dir = await getApplicationDocumentsDirectory();
+    final pendingDir = Directory('${dir.path}/pending_images');
+
+    // Create subfolder if it doesn't exist
+    if (!pendingDir.existsSync()) {
+      pendingDir.createSync(recursive: true);
+    }
+
     final targetPath =
-        '${dir.path}/compressed_${DateTime.now().millisecondsSinceEpoch}.jpg';
+        '${pendingDir.path}/report_${DateTime.now().millisecondsSinceEpoch}.jpg';
 
     final XFile? result = await FlutterImageCompress.compressAndGetFile(
       imageFile.absolute.path,

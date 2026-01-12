@@ -181,8 +181,9 @@ class _ReportScreenState extends State<ReportScreen> {
                               selected: isSelected,
                               selectedColor: primaryColor,
                               onSelected: (selected) {
-                                if (selected)
+                                if (selected) {
                                   setState(() => _pollutionType = type);
+                                }
                               },
                             );
                           }).toList(),

@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import '../../domain/entities/report.dart';
 import '../../domain/repositories/report_repository.dart';
 import '../datasources/report_data_source.dart';
@@ -7,6 +8,17 @@ class ReportRepositoryImpl implements ReportRepository {
   final ReportDataSource _dataSource;
 
   ReportRepositoryImpl(this._dataSource);
+
+  @override
+  Future<List<ReportEntity>> fetchReports() async {
+    try {
+      final data = await _dataSource.fetchReports();
+      return data.map((json) => ReportEntity.fromJson(json)).toList();
+    } catch (e) {
+      debugPrint('Error fetching reports: $e');
+      return [];
+    }
+  }
 
   @override
   Future<void> createReport({
@@ -23,7 +35,8 @@ class ReportRepositoryImpl implements ReportRepository {
           'POINT(${report.location.coordinates.lng} ${report.location.coordinates.lat})',
       'notes': report.notes,
       'is_anonymous': report.isAnonymous,
-      // 'address': report.address, // Add if schema supports it or use metadata
+      'city': report.city,
+      'country': report.country,
     };
 
     final createdReport = await _dataSource.createReport(reportData);

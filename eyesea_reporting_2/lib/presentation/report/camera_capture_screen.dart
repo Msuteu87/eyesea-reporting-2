@@ -3,8 +3,10 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:camera/camera.dart';
+import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:photo_manager/photo_manager.dart';
+import '../../core/services/image_compression_service.dart';
 import '../../core/theme/app_colors.dart';
 
 /// Full-screen camera capture with gallery carousel.
@@ -134,12 +136,8 @@ class _CameraCaptureScreenState extends State<CameraCaptureScreen>
         _showThumbnailAnimation = true;
       });
 
-      // Wait for animation then return
-      await Future.delayed(const Duration(milliseconds: 800));
-
-      if (mounted) {
-        Navigator.pop(context, file);
-      }
+      // Compress and navigate to report details
+      await _compressAndNavigate(file);
     } catch (e) {
       debugPrint('Capture error: $e');
       if (mounted) {
@@ -161,11 +159,42 @@ class _CameraCaptureScreenState extends State<CameraCaptureScreen>
       _showThumbnailAnimation = true;
     });
 
-    // Wait for animation then return
-    await Future.delayed(const Duration(milliseconds: 800));
+    // Compress and navigate to report details
+    await _compressAndNavigate(file);
+  }
 
-    if (mounted) {
-      Navigator.pop(context, file);
+  Future<void> _compressAndNavigate(File originalFile) async {
+    try {
+      debugPrint('🗜️ Compressing image...');
+      final compressedFile = await ImageCompressionService.compressImage(
+        originalFile,
+        quality: 80,
+        maxWidth: 1920,
+        maxHeight: 1920,
+      );
+
+      final originalSize = await originalFile.length();
+      final compressedSize = await compressedFile.length();
+      final reduction =
+          ((1 - compressedSize / originalSize) * 100).toStringAsFixed(1);
+      debugPrint(
+          '🗜️ Compressed: ${originalSize ~/ 1024}KB → ${compressedSize ~/ 1024}KB ($reduction% reduction)');
+
+      // Wait for animation
+      await Future.delayed(const Duration(milliseconds: 600));
+
+      if (mounted) {
+        // Navigate to report details with compressed image
+        context.push(
+            '/report-details?imagePath=${Uri.encodeComponent(compressedFile.path)}');
+      }
+    } catch (e) {
+      debugPrint('Compression error: $e');
+      if (mounted) {
+        // Fall back to original file if compression fails
+        context.push(
+            '/report-details?imagePath=${Uri.encodeComponent(originalFile.path)}');
+      }
     }
   }
 

@@ -52,8 +52,12 @@ class LayerFilterSheet extends StatelessWidget {
     // Recovered = resolved
     final showRecovered = visibleStatuses.contains(ReportStatus.resolved);
 
+    // Nav bar is ~90pt + home indicator, add generous spacing above it
+    const navBarHeight = 100.0;
+    const spacing = 16.0;
+
     return Container(
-      margin: EdgeInsets.fromLTRB(12, 0, 12, 12 + bottomPadding + 80),
+      margin: EdgeInsets.fromLTRB(16, 0, 16, bottomPadding + navBarHeight + spacing),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF2C2C2E) : Colors.white,
         borderRadius: BorderRadius.circular(14),
@@ -63,7 +67,7 @@ class LayerFilterSheet extends StatelessWidget {
         children: [
           // Active Reports row
           _CompactToggleRow(
-            label: 'Active',
+            label: 'Active Reports',
             color: AppColors.oceanBlue,
             value: showActive,
             onChanged: (value) {
@@ -81,13 +85,13 @@ class LayerFilterSheet extends StatelessWidget {
           ),
           Divider(
             height: 1,
-            indent: 16,
-            endIndent: 16,
-            color: isDark ? Colors.white12 : Colors.black12,
+            indent: 20,
+            endIndent: 20,
+            color: isDark ? Colors.white12 : Colors.black.withValues(alpha: 0.08),
           ),
           // Recovered Reports row
           _CompactToggleRow(
-            label: 'Recovered',
+            label: 'Recovered Reports',
             color: Colors.green,
             value: showRecovered,
             onChanged: (value) {
@@ -126,7 +130,7 @@ class _CompactToggleRow extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       child: Row(
         children: [
           // Color indicator dot

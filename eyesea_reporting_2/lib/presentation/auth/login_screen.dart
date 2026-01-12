@@ -133,37 +133,11 @@ class _LoginScreenState extends State<LoginScreen> {
                         Theme.of(context).brightness == Brightness.dark
                             ? 'assets/images/logo_white.png'
                             : 'assets/images/logo.png',
-                        height: 150,
+                        width: 200,
+                        height: 220,
                         fit: BoxFit.contain,
                       ),
-                      const SizedBox(height: 16),
-
-                      // Welcome text - directly after logo
-                      Text(
-                        'Empowering communities',
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context)
-                            .textTheme
-                            .headlineMedium
-                            ?.copyWith(
-                              fontFamily: 'Roboto',
-                              fontWeight: FontWeight.bold,
-                            ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Sign in to your account',
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                              fontFamily: 'Roboto',
-                              color: Theme.of(context)
-                                  .textTheme
-                                  .bodyLarge
-                                  ?.color
-                                  ?.withValues(alpha: 0.6),
-                            ),
-                      ),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 12),
 
                       // Login Card
                       Card(
@@ -174,7 +148,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           borderRadius: BorderRadius.circular(16),
                         ),
                         child: Padding(
-                          padding: const EdgeInsets.all(24),
+                          padding: const EdgeInsets.all(20),
                           child: Form(
                             key: _formKey,
                             child: Column(
@@ -290,7 +264,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
 
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 16),
 
                       // SSO Buttons Row - Google, Apple (TODO), LinkedIn (TODO)
                       Row(

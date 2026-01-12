@@ -8,6 +8,7 @@ class AppColors {
   static const Color deepNavy = Color(0xFF0F2C59); // Deep Navy from new logo
   static const Color punchRed = Color(0xFFE71D36);
   static const Color amberGlow = Color(0xFFFF9F1C);
+  static const Color oceanBlue = Color(0xFF0077BE);
 
   // Semantic Aliases
   static const Color primary =
@@ -17,6 +18,8 @@ class AppColors {
   static const Color backgroundDark = inkBlack;
   static const Color error = punchRed;
   static const Color warning = amberGlow;
+  static const Color successGreen =
+      Color(0xFF22C55E); // Green for success states
 
   // Legacy aliases to prevent breakages during migration (mapped to new palette)
   static const Map<int, Color> shark = {
