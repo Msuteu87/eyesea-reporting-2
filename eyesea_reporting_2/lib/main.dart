@@ -17,6 +17,7 @@ import 'core/services/ai_analysis_service.dart';
 import 'presentation/providers/auth_provider.dart';
 import 'presentation/providers/reports_map_provider.dart';
 import 'presentation/providers/social_feed_provider.dart';
+import 'presentation/providers/events_provider.dart';
 import 'presentation/routes/app_router.dart';
 import 'data/datasources/organization_data_source.dart';
 import 'data/repositories/organization_repository_impl.dart';
@@ -24,6 +25,8 @@ import 'domain/repositories/organization_repository.dart';
 import 'data/datasources/event_data_source.dart';
 import 'data/repositories/event_repository_impl.dart';
 import 'domain/repositories/event_repository.dart';
+import 'data/datasources/badge_data_source.dart';
+import 'presentation/providers/profile_provider.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -79,6 +82,10 @@ Future<void> main() async {
 
   final aiAnalysisService = AIAnalysisService();
 
+  // Initialize badge data source and profile provider for gamification
+  final badgeDataSource = BadgeDataSource(supabaseClient);
+  final profileProvider = ProfileProvider(badgeDataSource, reportDataSource);
+
   // Initialize notification service for realtime in-app notifications
   final notificationService = NotificationService(supabaseClient);
   await notificationService.initialize();
@@ -96,6 +103,9 @@ Future<void> main() async {
     socialFeedDataSource,
     connectivityService,
   );
+
+  // Create events provider for cleanup events
+  final eventsProvider = EventsProvider(eventRepository);
 
   final appRouter = AppRouter(authProvider);
 
@@ -120,6 +130,12 @@ Future<void> main() async {
         ),
         ChangeNotifierProvider<SocialFeedProvider>.value(
           value: socialFeedProvider,
+        ),
+        ChangeNotifierProvider<ProfileProvider>.value(
+          value: profileProvider,
+        ),
+        ChangeNotifierProvider<EventsProvider>.value(
+          value: eventsProvider,
         ),
       ],
       child: EyeseaApp(router: appRouter.router),

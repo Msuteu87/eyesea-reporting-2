@@ -2,11 +2,13 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/utils/logger.dart';
 import '../../domain/entities/event.dart';
 
+/// Data source for event-related API calls to Supabase.
 class EventDataSource {
   final SupabaseClient _supabaseClient;
 
   EventDataSource(this._supabaseClient);
 
+  /// Creates a new event in the database.
   Future<void> createEvent(Map<String, dynamic> eventData) async {
     try {
       await _supabaseClient.from('events').insert(eventData);
@@ -16,45 +18,85 @@ class EventDataSource {
     }
   }
 
-  Future<List<EventEntity>> fetchEvents({bool onlyMyEvents = false}) async {
+  /// Fetches events using the RPC function with filtering.
+  Future<List<EventEntity>> fetchEvents({String filter = 'upcoming'}) async {
     try {
-      var query = _supabaseClient.from('events').select();
+      final userId = _supabaseClient.auth.currentUser?.id;
 
-      if (onlyMyEvents) {
-        final userId = _supabaseClient.auth.currentUser?.id;
-        if (userId != null) {
-          query = query.eq('organizer_id', userId);
-        }
-      }
+      final response = await _supabaseClient.rpc(
+        'get_events_with_details',
+        params: {
+          'p_user_id': userId,
+          'p_filter': filter,
+          'p_limit': 50,
+        },
+      );
 
-      // Order by start time desc
-      final data = await query.order('start_time', ascending: false);
-
-      return (data as List).map((json) => _mapEvent(json)).toList();
+      return (response as List)
+          .map((json) => EventEntity.fromJson(json as Map<String, dynamic>))
+          .toList();
     } catch (e) {
       AppLogger.error('Error fetching events', e);
       throw Exception('Failed to fetch events');
     }
   }
 
-  EventEntity _mapEvent(Map<String, dynamic> json) {
-    return EventEntity(
-      id: json['id'],
-      organizerId: json['organizer_id'],
-      title: json['title'],
-      description: json['description'] ?? '',
-      location:
-          json['location_text'], // Assuming location_text usage or fallback
-      // Lat/Lon might need parsing if stored as geography, or separate columns
-      // Schema proposal said "location geography(POINT)".
-      // Handling PostGIS point in Supabase allows extracting lat/long, or we stored them separately?
-      // Proposal: "location (geography POINT), address (text)".
-      // Let's assume we read 'address' for location text.
-      // And we might need a way to parse POINT if we want lat/lon.
-      // For now let's use 'address' field.
-      startTime: DateTime.parse(json['start_time']),
-      endTime: DateTime.parse(json['end_time']),
-      status: json['status'],
-    );
+  /// Fetches attendees for a specific event.
+  Future<List<EventAttendee>> fetchEventAttendees(String eventId) async {
+    try {
+      final response = await _supabaseClient.rpc(
+        'get_event_attendees',
+        params: {'p_event_id': eventId},
+      );
+
+      return (response as List)
+          .map((json) => EventAttendee.fromJson(json as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      AppLogger.error('Error fetching event attendees', e);
+      throw Exception('Failed to fetch attendees');
+    }
+  }
+
+  /// Joins an event (RSVP).
+  Future<bool> joinEvent(String eventId) async {
+    try {
+      final userId = _supabaseClient.auth.currentUser?.id;
+      if (userId == null) throw Exception('User not authenticated');
+
+      final response = await _supabaseClient.rpc(
+        'join_event',
+        params: {
+          'p_event_id': eventId,
+          'p_user_id': userId,
+        },
+      );
+
+      return response['success'] == true;
+    } catch (e) {
+      AppLogger.error('Error joining event', e);
+      throw Exception('Failed to join event');
+    }
+  }
+
+  /// Leaves an event (cancels RSVP).
+  Future<bool> leaveEvent(String eventId) async {
+    try {
+      final userId = _supabaseClient.auth.currentUser?.id;
+      if (userId == null) throw Exception('User not authenticated');
+
+      final response = await _supabaseClient.rpc(
+        'leave_event',
+        params: {
+          'p_event_id': eventId,
+          'p_user_id': userId,
+        },
+      );
+
+      return response['success'] == true;
+    } catch (e) {
+      AppLogger.error('Error leaving event', e);
+      throw Exception('Failed to leave event');
+    }
   }
 }

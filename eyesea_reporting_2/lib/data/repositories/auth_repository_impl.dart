@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
 import '../../domain/entities/user.dart';
 import '../../domain/repositories/auth_repository.dart';
@@ -21,6 +22,7 @@ class AuthRepositoryImpl implements AuthRepository {
     final user = _dataSource.currentUser;
     if (user == null) return null;
     final profile = await _dataSource.fetchUserProfile(user.id);
+    debugPrint('[Avatar] Fetched profile avatar_url: ${profile?['avatar_url']}');
     return _mapToEntity(user, profile);
   }
 
@@ -126,12 +128,15 @@ class AuthRepositoryImpl implements AuthRepository {
 
     // 1. Upload Image
     final publicUrl = await _dataSource.uploadAvatar(user.id, imageFile);
+    debugPrint('[Avatar] Got public URL: $publicUrl');
 
     // 2. Update Profile with new URL
+    debugPrint('[Avatar] Updating profile with avatar_url...');
     await _dataSource.updateUserProfile(user.id, {
       'avatar_url': publicUrl,
       'updated_at': DateTime.now().toIso8601String(),
     });
+    debugPrint('[Avatar] Profile updated successfully');
   }
 
   UserEntity _mapToEntity(supabase.User user, [Map<String, dynamic>? profile]) {

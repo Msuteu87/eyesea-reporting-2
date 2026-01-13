@@ -4,11 +4,13 @@ import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' hide ImageSource;
 import 'package:geolocator/geolocator.dart' as geo;
 import 'package:provider/provider.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/utils/map_pin_generator.dart';
 import '../../domain/entities/report.dart';
+import '../providers/auth_provider.dart';
 import '../providers/reports_map_provider.dart';
 import 'widgets/layer_filter_fab.dart';
 import 'widgets/layer_filter_sheet.dart';
-import 'widgets/marker_count_badge.dart';
+import 'widgets/map_search_bar.dart';
 import 'widgets/my_location_fab.dart';
 import 'widgets/report_detail_card.dart';
 
@@ -25,7 +27,9 @@ class _HomeScreenState extends State<HomeScreen> {
   MapboxMap? _mapboxMap;
   bool _mapReady = false;
   bool _initialLoadDone = false;
+  bool _pinImagesAdded = false;
   MapMarkerData? _selectedMarker;
+  String? _currentMapStyle;
 
   // Mapbox style: dynamic based on theme
   String get _mapStyle {
@@ -39,8 +43,84 @@ class _HomeScreenState extends State<HomeScreen> {
     _getCurrentLocation();
     // Listen for provider updates to re-render markers
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<ReportsMapProvider>().addListener(_onMarkersUpdated);
+      final reportsProvider = context.read<ReportsMapProvider>();
+      reportsProvider.addListener(_onMarkersUpdated);
+
+      // Set current user ID for "My Reports" filtering
+      final authProvider = context.read<AuthProvider>();
+      reportsProvider.setCurrentUserId(authProvider.currentUser?.id);
     });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Delay style update to after the current frame to avoid conflicts
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _updateMapStyleIfNeeded();
+    });
+  }
+
+  /// Update map style when theme changes
+  void _updateMapStyleIfNeeded() {
+    if (!mounted || _mapboxMap == null || !_mapReady) return;
+
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final newStyle = isDark ? MapboxStyles.DARK : MapboxStyles.LIGHT;
+
+    if (_currentMapStyle != newStyle) {
+      _currentMapStyle = newStyle;
+      _mapboxMap!.style.setStyleURI(newStyle).then((_) {
+        if (!mounted) return;
+        // Re-apply custom layers after style change
+        _renderMarkersWithClustering();
+        _updateWaterColor(isDark);
+      });
+    }
+  }
+
+  /// Update water color based on theme
+  void _updateWaterColor(bool isDark) {
+    try {
+      final waterColor = isDark ? '#1a3a4a' : '#9fb8c8';
+      _mapboxMap?.style
+          .setStyleLayerProperty('water', 'fill-color', waterColor);
+    } catch (e) {
+      debugPrint('Could not customize water color: $e');
+    }
+  }
+
+  /// Generate and add pin marker images to the map style
+  Future<void> _addPinImagesToStyle() async {
+    if (_mapboxMap == null || _pinImagesAdded) return;
+
+    try {
+      // Generate all pin variants
+      final pins = await MapPinGenerator.generateAllPins();
+
+      // Add each pin image to the map style
+      for (final entry in pins.entries) {
+        final imageData = MbxImage(
+          width: MapPinGenerator.pinWidth.toInt(),
+          height: MapPinGenerator.pinHeight.toInt(),
+          data: entry.value,
+        );
+        await _mapboxMap!.style.addStyleImage(
+          entry.key,
+          1.0, // scale
+          imageData,
+          false, // sdf
+          [], // stretch X
+          [], // stretch Y
+          null, // content
+        );
+      }
+
+      _pinImagesAdded = true;
+      debugPrint('📍 Pin marker images added to style');
+    } catch (e) {
+      debugPrint('❌ Error adding pin images: $e');
+    }
   }
 
   @override
@@ -77,6 +157,13 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _onMapCreated(MapboxMap mapboxMap) async {
     _mapboxMap = mapboxMap;
 
+    // Track initial style
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    _currentMapStyle = isDark ? MapboxStyles.DARK : MapboxStyles.LIGHT;
+
+    // Disable scale bar ornament for cleaner UI
+    await mapboxMap.scaleBar.updateSettings(ScaleBarSettings(enabled: false));
+
     // Enable user location puck
     await mapboxMap.location.updateSettings(
       LocationComponentSettings(
@@ -86,16 +173,11 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
 
-    // Customize water color to light blue for ocean theme
-    try {
-      await mapboxMap.style.setStyleLayerProperty(
-        'water',
-        'fill-color',
-        '#9fb8c8',
-      );
-    } catch (e) {
-      debugPrint('Could not customize water color: $e');
-    }
+    // Customize water color based on theme
+    _updateWaterColor(isDark);
+
+    // Generate and add pin marker images
+    await _addPinImagesToStyle();
 
     // If we have location, fly to it
     if (_currentPosition != null) {
@@ -156,17 +238,21 @@ class _HomeScreenState extends State<HomeScreen> {
     final provider = context.read<ReportsMapProvider>();
     final markers = provider.filteredMarkers; // Use filtered markers
 
-    debugPrint('📍 Setting up clustering for ${markers.length} markers (filtered)');
+    debugPrint(
+        '📍 Setting up clustering for ${markers.length} markers (filtered)');
 
     // Always remove existing layers first (even if no markers to display)
     try {
-      await _mapboxMap!.style.removeStyleLayer('clusters');
+      await _mapboxMap!.style.removeStyleLayer('unclustered-point');
     } catch (_) {}
     try {
       await _mapboxMap!.style.removeStyleLayer('cluster-count');
     } catch (_) {}
     try {
-      await _mapboxMap!.style.removeStyleLayer('unclustered-point');
+      await _mapboxMap!.style.removeStyleLayer('clusters');
+    } catch (_) {}
+    try {
+      await _mapboxMap!.style.removeStyleLayer('cluster-glow');
     } catch (_) {}
     try {
       await _mapboxMap!.style.removeStyleSource('reports-source');
@@ -211,59 +297,77 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       );
 
-      // Cluster circles layer - size based on point count
+      // === CLUSTER LAYERS ===
+
+      // Cluster outer glow (shadow effect)
+      await _mapboxMap!.style.addLayer(
+        CircleLayer(
+          id: 'cluster-glow',
+          sourceId: 'reports-source',
+          filter: <Object>['has', 'point_count'],
+          circleColor: AppColors.electricNavy.withValues(alpha: 0.3).toARGB32(),
+          circleRadius: 32.0,
+          circleBlur: 1.0,
+        ),
+      );
+
+      // Cluster main circle
       await _mapboxMap!.style.addLayer(
         CircleLayer(
           id: 'clusters',
           sourceId: 'reports-source',
           filter: <Object>['has', 'point_count'],
-          circleColor: AppColors.oceanBlue.toARGB32(),
-          // Dynamic radius based on cluster size
-          circleRadius: 25.0,
+          circleColor: AppColors.electricNavy.toARGB32(),
+          circleRadius: 24.0,
           circleStrokeWidth: 3.0,
           circleStrokeColor: Colors.white.toARGB32(),
         ),
       );
 
-      // Cluster count text layer - larger, bolder
+      // Cluster count text
       await _mapboxMap!.style.addLayer(
         SymbolLayer(
           id: 'cluster-count',
           sourceId: 'reports-source',
           filter: <Object>['has', 'point_count'],
           textField: '{point_count_abbreviated}',
-          textSize: 14.0,
+          textSize: 13.0,
           textColor: Colors.white.toARGB32(),
         ),
       );
 
-      // Unclustered points layer (individual markers at high zoom)
-      // Green for resolved, blue for active
+      // === INDIVIDUAL MARKER LAYERS (Pin Style) ===
+
+      // Ensure pin images are added to style
+      await _addPinImagesToStyle();
+
+      // Pin marker symbol layer
       await _mapboxMap!.style.addLayer(
-        CircleLayer(
+        SymbolLayer(
           id: 'unclustered-point',
           sourceId: 'reports-source',
           filter: <Object>[
             '!',
             <Object>['has', 'point_count']
           ],
-          circleRadius: 10.0,
-          circleStrokeWidth: 2.0,
-          circleStrokeColor: Colors.white.toARGB32(),
+          iconAllowOverlap: true,
+          iconIgnorePlacement: true,
+          iconSize: 0.8,
+          iconAnchor: IconAnchor.BOTTOM,
         ),
       );
 
-      // Set data-driven color expression for markers
-      // Green (#4CAF50) for resolved, ocean blue for active
-      final oceanBlueHex = '#${AppColors.oceanBlue.toARGB32().toRadixString(16).substring(2)}';
+      // Set icon-image based on status (red for reported, green for recovered)
       await _mapboxMap!.style.setStyleLayerProperty(
         'unclustered-point',
-        'circle-color',
+        'icon-image',
         [
           'case',
           ['get', 'isResolved'],
-          '#4CAF50', // Green for resolved
-          oceanBlueHex, // Blue for active
+          'pin-recovered', // Green pin for recovered
+          ['get', 'isPending'],
+          'pin-pending', // Amber pin for pending
+          'pin-reported', // Red pin for active/reported
         ],
       );
 
@@ -337,7 +441,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
         // Handle Mapbox's CastMap types by checking type first
         final featureObj = queriedFeature.feature;
-        if (featureObj is! Map) return;
 
         final propertiesObj = featureObj['properties'];
         if (propertiesObj is! Map) return;
@@ -387,6 +490,21 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  /// Fly to a specific location (from search)
+  Future<void> _flyToLocation(double latitude, double longitude) async {
+    if (_mapboxMap == null) return;
+
+    await _mapboxMap!.flyTo(
+      CameraOptions(
+        center: Point(
+          coordinates: Position(longitude, latitude),
+        ),
+        zoom: 12.0,
+      ),
+      MapAnimationOptions(duration: 1000),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final initialCamera = CameraOptions(
@@ -403,22 +521,6 @@ class _HomeScreenState extends State<HomeScreen> {
       extendBody: true,
       extendBodyBehindAppBar: true,
       backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        flexibleSpace: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                AppColors.inkBlack.withValues(alpha: 0.8),
-                Colors.transparent,
-              ],
-            ),
-          ),
-        ),
-      ),
       body: Stack(
         children: [
           // Map Layer
@@ -431,11 +533,14 @@ class _HomeScreenState extends State<HomeScreen> {
                   onMapCreated: _onMapCreated,
                 ),
 
-          // Marker count badge (top right)
+          // Floating search bar with user avatar (top)
           Positioned(
-            top: MediaQuery.of(context).padding.top + 56,
+            top: MediaQuery.of(context).padding.top + 12,
+            left: 16,
             right: 16,
-            child: const MarkerCountBadge(),
+            child: MapSearchBar(
+              onLocationSelected: _flyToLocation,
+            ),
           ),
 
           // Report Detail Card (bottom, above nav bar)
@@ -443,7 +548,7 @@ class _HomeScreenState extends State<HomeScreen> {
             Positioned(
               left: 0,
               right: 0,
-              bottom: 100,
+              bottom: 105,
               child: ReportDetailCard(
                 marker: _selectedMarker!,
                 imageUrl: _selectedMarker!.imageUrl,
@@ -471,9 +576,11 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
 
-          // FAB Stack (bottom right, fixed position above card area)
-          Positioned(
-            bottom: 260, // Fixed position - always above where card would appear
+          // FAB Stack (bottom right, animates up when card appears)
+          AnimatedPositioned(
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOutCubic,
+            bottom: _selectedMarker != null ? 266 : 131,
             right: 16,
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -499,9 +606,11 @@ class _HomeScreenState extends State<HomeScreen> {
     final result = await LayerFilterSheet.show(
       context,
       currentStatuses: provider.visibleStatuses,
+      showOnlyMyReports: provider.showOnlyMyReports,
     );
     if (result != null) {
-      provider.setVisibleStatuses(result);
+      provider.setVisibleStatuses(result.statuses);
+      provider.setShowOnlyMyReports(result.showOnlyMyReports);
     }
   }
 }

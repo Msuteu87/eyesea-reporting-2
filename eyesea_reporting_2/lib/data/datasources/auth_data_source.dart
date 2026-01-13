@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/errors/exceptions.dart';
+import '../../core/utils/logger.dart';
 
 /// Data source for authentication operations.
 class AuthDataSource {
@@ -88,15 +89,29 @@ class AuthDataSource {
 
   Future<String> uploadAvatar(String userId, File imageFile) async {
     try {
-      final fileName = '${DateTime.now().toIso8601String()}.jpg';
+      final fileSize = await imageFile.length();
+      final fileName = '${DateTime.now().millisecondsSinceEpoch}.jpg';
       final path = '$userId/$fileName';
 
-      await _supabase.storage.from('avatars').upload(path, imageFile,
-          fileOptions: const FileOptions(upsert: true));
+      AppLogger.info('[Avatar] Uploading file: $path (size: $fileSize bytes)');
+
+      await _supabase.storage.from('avatars').upload(
+        path,
+        imageFile,
+        fileOptions: const FileOptions(
+          upsert: true,
+          contentType: 'image/jpeg',
+        ),
+      );
 
       final publicUrl = _supabase.storage.from('avatars').getPublicUrl(path);
-      return publicUrl;
+      // Add cache-busting query parameter to ensure fresh image loads
+      final cacheBustedUrl = '$publicUrl?t=${DateTime.now().millisecondsSinceEpoch}';
+
+      AppLogger.info('[Avatar] Upload successful. URL: $cacheBustedUrl');
+      return cacheBustedUrl;
     } catch (e) {
+      AppLogger.error('[Avatar] Upload failed', e);
       throw ServerException(message: e.toString());
     }
   }

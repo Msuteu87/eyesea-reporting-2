@@ -113,7 +113,8 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen> {
 
   bool _hasPeopleDetected = false;
   Map<PollutionType, int> _typeCounts = {};
-  Map<PollutionType, int> _aiBaselineCounts = {}; // Store AI detection baseline for fraud comparison
+  Map<PollutionType, int> _aiBaselineCounts =
+      {}; // Store AI detection baseline for fraud comparison
 
   Future<void> _analyzeImage() async {
     if (!mounted) return;
@@ -191,7 +192,8 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen> {
             setState(() {
               _selectedPollutionTypes = detectedTypes;
               _typeCounts = detectedCounts;
-              _aiBaselineCounts = Map.from(detectedCounts); // Store baseline for fraud detection
+              _aiBaselineCounts = Map.from(
+                  detectedCounts); // Store baseline for fraud detection
             });
           }
 
@@ -300,7 +302,8 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen> {
         sceneLabels: _sceneLabels,
       );
 
-      final totalWeight = PollutionCalculations.calculateTotalWeight(_typeCounts);
+      final totalWeight =
+          PollutionCalculations.calculateTotalWeight(_typeCounts);
 
       final fraud = PollutionCalculations.detectFraud(
         userCounts: _typeCounts,
@@ -448,9 +451,9 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen> {
                               color: Colors.white.withValues(alpha: 0.3),
                             ),
                           ),
-                          child: Row(
+                          child: const Row(
                             mainAxisSize: MainAxisSize.min,
-                            children: const [
+                            children: [
                               Icon(
                                 LucideIcons.camera,
                                 color: Colors.white,
@@ -559,7 +562,6 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen> {
     );
   }
 
-
   Widget _buildSubmitButton(Color primaryColor) {
     // Block submission if analyzing OR if people detected
     final isDisabled = _isSubmitting || _hasPeopleDetected;
@@ -585,11 +587,11 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen> {
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: AppColors.punchRed),
               ),
-              child: Row(
+              child: const Row(
                 children: [
-                  const Icon(LucideIcons.userX, color: AppColors.punchRed),
-                  const SizedBox(width: 12),
-                  const Expanded(
+                  Icon(LucideIcons.userX, color: AppColors.punchRed),
+                  SizedBox(width: 12),
+                  Expanded(
                     child: Text(
                       'For privacy reasons, you cannot submit reports containing people. Please retake the photo.',
                       style: TextStyle(
@@ -672,12 +674,12 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Row(
+              const Row(
                 children: [
-                  const Icon(LucideIcons.alertTriangle,
+                  Icon(LucideIcons.alertTriangle,
                       color: Colors.white, size: 20),
-                  const SizedBox(width: 12),
-                  const Expanded(
+                  SizedBox(width: 12),
+                  Expanded(
                     child: Text(
                       'Suspicious Activity Detected',
                       style: TextStyle(
@@ -712,7 +714,8 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen> {
           backgroundColor: Colors.orange.shade700,
           behavior: SnackBarBehavior.floating,
           duration: const Duration(seconds: 6),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           action: SnackBarAction(
             label: 'Submit Anyway',
             textColor: Colors.white,
@@ -836,6 +839,6 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen> {
 
 extension StringExtension on String {
   String capitalize() {
-    return "${this[0].toUpperCase()}${substring(1)}";
+    return '${this[0].toUpperCase()}${substring(1)}';
   }
 }

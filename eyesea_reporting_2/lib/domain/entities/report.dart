@@ -54,6 +54,7 @@ class ReportEntity {
   final String? country;
   final double? totalWeightKg;
   final Map<PollutionType, int> pollutionCounts;
+  final int? xpEarned;
 
   ReportEntity({
     required this.id,
@@ -72,6 +73,7 @@ class ReportEntity {
     this.country,
     this.totalWeightKg,
     this.pollutionCounts = const {},
+    this.xpEarned,
   });
 
   /// Factory constructor to create ReportEntity from Supabase JSON response
@@ -222,6 +224,7 @@ class ReportEntity {
       country: json['country'] as String?,
       totalWeightKg: (json['total_weight_kg'] as num?)?.toDouble(),
       pollutionCounts: pollutionCountsMap,
+      xpEarned: (json['xp_earned'] as num?)?.toInt(),
     );
   }
 }

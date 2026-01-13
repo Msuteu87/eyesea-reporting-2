@@ -42,7 +42,7 @@ class _SocialFeedScreenState extends State<SocialFeedScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: isDark ? AppColors.inkBlack : AppColors.porcelain,
+      backgroundColor: isDark ? AppColors.inkBlack : AppColors.culturedWhite,
       body: SafeArea(
         child: Consumer<SocialFeedProvider>(
           builder: (context, provider, _) {
@@ -56,7 +56,7 @@ class _SocialFeedScreenState extends State<SocialFeedScreen> {
 
                 // Filter control
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: FeedFilterControl(
                     selected: provider.currentFilter,
                     onChanged: provider.setFilter,
@@ -64,6 +64,8 @@ class _SocialFeedScreenState extends State<SocialFeedScreen> {
                     cityName: provider.filterCity,
                   ),
                 ),
+
+                const SizedBox(height: 16),
 
                 // Feed list
                 Expanded(
@@ -79,18 +81,33 @@ class _SocialFeedScreenState extends State<SocialFeedScreen> {
 
   Widget _buildAppBar(BuildContext context, bool isDark) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+      padding: const EdgeInsets.all(16),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Community Feed',
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.w700,
-              color: isDark ? Colors.white : AppColors.inkBlack,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Community Feed',
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.white : AppColors.darkGunmetal,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'See what others are reporting',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: isDark ? Colors.grey[400] : Colors.grey,
+                  ),
+                ),
+              ],
             ),
           ),
-          const Spacer(),
           // Refresh button
           IconButton(
             onPressed: () {

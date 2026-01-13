@@ -1,44 +1,68 @@
 import 'package:flutter/material.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../domain/entities/report.dart';
 
-/// Bottom sheet for filtering map layers by report status.
-/// Shows toggle switches for Active and Recovered reports.
+/// Result from the filter sheet containing both status and user filters
+class LayerFilterResult {
+  final Set<ReportStatus> statuses;
+  final bool showOnlyMyReports;
+
+  const LayerFilterResult({
+    required this.statuses,
+    required this.showOnlyMyReports,
+  });
+}
+
+/// Bottom sheet for filtering map layers by report status and ownership.
+/// Shows toggle switches for My Reports, Active, and Recovered reports.
 class LayerFilterSheet extends StatelessWidget {
   final Set<ReportStatus> visibleStatuses;
-  final ValueChanged<Set<ReportStatus>> onChanged;
+  final bool showOnlyMyReports;
+  final ValueChanged<Set<ReportStatus>> onStatusChanged;
+  final ValueChanged<bool> onMyReportsChanged;
 
   const LayerFilterSheet({
     super.key,
     required this.visibleStatuses,
-    required this.onChanged,
+    required this.showOnlyMyReports,
+    required this.onStatusChanged,
+    required this.onMyReportsChanged,
   });
 
-  /// Show the filter sheet and return the updated visible statuses
-  static Future<Set<ReportStatus>?> show(
+  /// Show the filter sheet and return the updated filter result
+  static Future<LayerFilterResult?> show(
     BuildContext context, {
     required Set<ReportStatus> currentStatuses,
+    required bool showOnlyMyReports,
   }) async {
-    return showModalBottomSheet<Set<ReportStatus>>(
+    return showModalBottomSheet<LayerFilterResult>(
       context: context,
       backgroundColor: Colors.transparent,
-      isScrollControlled: true, // Allow sheet to size to content
+      isScrollControlled: true,
       builder: (context) {
         Set<ReportStatus> statuses = Set.from(currentStatuses);
+        bool myReports = showOnlyMyReports;
         return StatefulBuilder(
           builder: (context, setState) {
             return LayerFilterSheet(
               visibleStatuses: statuses,
-              onChanged: (newStatuses) {
+              showOnlyMyReports: myReports,
+              onStatusChanged: (newStatuses) {
                 setState(() {
                   statuses = newStatuses;
+                });
+              },
+              onMyReportsChanged: (value) {
+                setState(() {
+                  myReports = value;
                 });
               },
             );
           },
         );
       },
-    ).then((value) => value);
+    );
   }
 
   @override
@@ -65,10 +89,28 @@ class LayerFilterSheet extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          // My Reports toggle (primary filter)
+          _CompactToggleRow(
+            label: 'My Reports Only',
+            icon: LucideIcons.user,
+            color: AppColors.electricNavy,
+            value: showOnlyMyReports,
+            onChanged: (value) {
+              onMyReportsChanged(value);
+              Navigator.pop(
+                context,
+                LayerFilterResult(
+                  statuses: visibleStatuses,
+                  showOnlyMyReports: value,
+                ),
+              );
+            },
+          ),
+          _buildDivider(isDark),
           // Active Reports row
           _CompactToggleRow(
             label: 'Active Reports',
-            color: AppColors.oceanBlue,
+            color: const Color(0xFFEF4444), // Red for reported
             value: showActive,
             onChanged: (value) {
               final newStatuses = Set<ReportStatus>.from(visibleStatuses);
@@ -79,20 +121,21 @@ class LayerFilterSheet extends StatelessWidget {
                 newStatuses.remove(ReportStatus.pending);
                 newStatuses.remove(ReportStatus.verified);
               }
-              onChanged(newStatuses);
-              Navigator.pop(context, newStatuses);
+              onStatusChanged(newStatuses);
+              Navigator.pop(
+                context,
+                LayerFilterResult(
+                  statuses: newStatuses,
+                  showOnlyMyReports: showOnlyMyReports,
+                ),
+              );
             },
           ),
-          Divider(
-            height: 1,
-            indent: 20,
-            endIndent: 20,
-            color: isDark ? Colors.white12 : Colors.black.withValues(alpha: 0.08),
-          ),
+          _buildDivider(isDark),
           // Recovered Reports row
           _CompactToggleRow(
             label: 'Recovered Reports',
-            color: Colors.green,
+            color: AppColors.emerald,
             value: showRecovered,
             onChanged: (value) {
               final newStatuses = Set<ReportStatus>.from(visibleStatuses);
@@ -101,12 +144,27 @@ class LayerFilterSheet extends StatelessWidget {
               } else {
                 newStatuses.remove(ReportStatus.resolved);
               }
-              onChanged(newStatuses);
-              Navigator.pop(context, newStatuses);
+              onStatusChanged(newStatuses);
+              Navigator.pop(
+                context,
+                LayerFilterResult(
+                  statuses: newStatuses,
+                  showOnlyMyReports: showOnlyMyReports,
+                ),
+              );
             },
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildDivider(bool isDark) {
+    return Divider(
+      height: 1,
+      indent: 20,
+      endIndent: 20,
+      color: isDark ? Colors.white12 : Colors.black.withValues(alpha: 0.08),
     );
   }
 }
@@ -114,12 +172,14 @@ class LayerFilterSheet extends StatelessWidget {
 /// Compact iOS-style toggle row
 class _CompactToggleRow extends StatelessWidget {
   final String label;
+  final IconData? icon;
   final Color color;
   final bool value;
   final ValueChanged<bool> onChanged;
 
   const _CompactToggleRow({
     required this.label,
+    this.icon,
     required this.color,
     required this.value,
     required this.onChanged,
@@ -133,15 +193,22 @@ class _CompactToggleRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       child: Row(
         children: [
-          // Color indicator dot
-          Container(
-            width: 10,
-            height: 10,
-            decoration: BoxDecoration(
+          // Icon or color indicator dot
+          if (icon != null)
+            Icon(
+              icon,
+              size: 18,
               color: color,
-              shape: BoxShape.circle,
+            )
+          else
+            Container(
+              width: 10,
+              height: 10,
+              decoration: BoxDecoration(
+                color: color,
+                shape: BoxShape.circle,
+              ),
             ),
-          ),
           const SizedBox(width: 12),
           Expanded(
             child: Text(

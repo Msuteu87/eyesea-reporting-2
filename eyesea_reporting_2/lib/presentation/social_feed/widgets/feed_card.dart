@@ -25,13 +25,13 @@ class FeedCard extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+        color: isDark ? AppColors.darkSurface : AppColors.pureWhite,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
@@ -64,7 +64,7 @@ class FeedCard extends StatelessWidget {
           // Avatar
           CircleAvatar(
             radius: 20,
-            backgroundColor: AppColors.oceanBlue.withValues(alpha: 0.2),
+            backgroundColor: AppColors.electricNavy.withValues(alpha: 0.2),
             backgroundImage: item.avatarUrl != null
                 ? NetworkImage(item.avatarUrl!)
                 : null,
@@ -72,7 +72,7 @@ class FeedCard extends StatelessWidget {
                 ? const Icon(
                     LucideIcons.user,
                     size: 20,
-                    color: AppColors.oceanBlue,
+                    color: AppColors.electricNavy,
                   )
                 : null,
           ),
@@ -143,7 +143,7 @@ class FeedCard extends StatelessWidget {
                   return Center(
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
-                      color: AppColors.oceanBlue,
+                      color: AppColors.electricNavy,
                       value: loadingProgress.expectedTotalBytes != null
                           ? loadingProgress.cumulativeBytesLoaded /
                               loadingProgress.expectedTotalBytes!
@@ -226,7 +226,7 @@ class FeedCard extends StatelessWidget {
               Icon(
                 _getPollutionIcon(item.pollutionType),
                 size: 18,
-                color: AppColors.oceanBlue,
+                color: AppColors.electricNavy,
               ),
               const SizedBox(width: 6),
               Text(
@@ -327,7 +327,7 @@ class FeedCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: AppColors.oceanBlue.withValues(alpha: 0.15),
+        color: AppColors.electricNavy.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
@@ -336,7 +336,7 @@ class FeedCard extends StatelessWidget {
           Icon(
             _getPollutionIcon(type),
             size: 14,
-            color: AppColors.oceanBlue,
+            color: AppColors.electricNavy,
           ),
           const SizedBox(width: 4),
           Text(
@@ -344,7 +344,7 @@ class FeedCard extends StatelessWidget {
             style: const TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w600,
-              color: AppColors.oceanBlue,
+              color: AppColors.electricNavy,
             ),
           ),
         ],

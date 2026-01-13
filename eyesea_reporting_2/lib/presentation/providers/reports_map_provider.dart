@@ -9,6 +9,7 @@ import '../../domain/entities/report.dart';
 /// Data class for map markers combining local and remote reports
 class MapMarkerData {
   final String id;
+  final String? userId; // Reporter's user ID for filtering
   final double latitude;
   final double longitude;
   final PollutionType pollutionType;
@@ -23,6 +24,7 @@ class MapMarkerData {
 
   MapMarkerData({
     required this.id,
+    this.userId,
     required this.latitude,
     required this.longitude,
     required this.pollutionType,
@@ -37,7 +39,8 @@ class MapMarkerData {
   });
 
   /// Create from a pending (local) report
-  factory MapMarkerData.fromPending(PendingReport report) {
+  /// [currentUserId] should be passed since pending reports are always from the current user
+  factory MapMarkerData.fromPending(PendingReport report, {String? currentUserId}) {
     // Convert String keys to PollutionType keys
     final counts = <PollutionType, int>{};
     for (final entry in report.pollutionCounts.entries) {
@@ -53,6 +56,7 @@ class MapMarkerData {
 
     return MapMarkerData(
       id: report.id,
+      userId: currentUserId, // Pending reports are from current user
       latitude: report.latitude,
       longitude: report.longitude,
       pollutionType: _parsePollutionType(report.pollutionType),
@@ -76,6 +80,7 @@ class MapMarkerData {
 
     return MapMarkerData(
       id: report.id,
+      userId: report.userId, // From the report entity
       latitude: report.location.coordinates.lat.toDouble(),
       longitude: report.location.coordinates.lng.toDouble(),
       pollutionType: report.pollutionType,
@@ -131,6 +136,12 @@ class ReportsMapProvider extends ChangeNotifier {
     ReportStatus.resolved,
   };
 
+  /// Filter to show only current user's reports (default: true for performance)
+  bool _showOnlyMyReports = true;
+
+  /// Current user ID for filtering "My Reports"
+  String? _currentUserId;
+
   ReportsMapProvider(
     this._dataSource,
     this._queueService,
@@ -143,15 +154,37 @@ class ReportsMapProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get error => _error;
   Set<ReportStatus> get visibleStatuses => _visibleStatuses;
+  bool get showOnlyMyReports => _showOnlyMyReports;
+  String? get currentUserId => _currentUserId;
 
-  /// Get markers filtered by visible statuses
+  /// Set the current user ID for filtering
+  void setCurrentUserId(String? userId) {
+    _currentUserId = userId;
+    // Reload markers when user changes
+    loadMarkers();
+  }
+
+  /// Get markers filtered by visible statuses and optionally by user
   List<MapMarkerData> get filteredMarkers {
-    return _markers.where((m) => _visibleStatuses.contains(m.status)).toList();
+    var filtered = _markers.where((m) => _visibleStatuses.contains(m.status));
+
+    // If showOnlyMyReports is enabled and we have a user ID, filter by user
+    if (_showOnlyMyReports && _currentUserId != null) {
+      filtered = filtered.where((m) => m.userId == _currentUserId);
+    }
+
+    return filtered.toList();
   }
 
   /// Update the visible status filter
   void setVisibleStatuses(Set<ReportStatus> statuses) {
     _visibleStatuses = statuses;
+    notifyListeners();
+  }
+
+  /// Toggle showing only user's reports vs all reports
+  void setShowOnlyMyReports(bool value) {
+    _showOnlyMyReports = value;
     notifyListeners();
   }
 
@@ -208,7 +241,7 @@ class ReportsMapProvider extends ChangeNotifier {
               continue;
             }
           }
-          combinedMarkers.add(MapMarkerData.fromPending(pending));
+          combinedMarkers.add(MapMarkerData.fromPending(pending, currentUserId: _currentUserId));
           seenIds.add(pending.id);
         }
       }
@@ -283,6 +316,7 @@ class ReportsMapProvider extends ChangeNotifier {
         final oldMarker = _markers[index];
         _markers[index] = MapMarkerData(
           id: oldMarker.id,
+          userId: oldMarker.userId,
           latitude: oldMarker.latitude,
           longitude: oldMarker.longitude,
           pollutionType: oldMarker.pollutionType,

@@ -4,11 +4,16 @@ import 'package:provider/provider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:go_router/go_router.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 import '../../core/theme/app_colors.dart';
 import '../providers/auth_provider.dart';
+import '../providers/profile_provider.dart';
 import '../../domain/entities/user.dart';
 import '../../domain/entities/vessel.dart';
+import '../../domain/entities/badge.dart';
 import '../../domain/repositories/organization_repository.dart';
+import 'widgets/my_reports_tab.dart';
+import 'widgets/settings_tab.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -17,11 +22,12 @@ class ProfileScreen extends StatefulWidget {
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-class _ProfileScreenState extends State<ProfileScreen> {
-  // Tab State
-  bool _showOverview = true; // true = Overview, false = Competitions
+class _ProfileScreenState extends State<ProfileScreen>
+    with SingleTickerProviderStateMixin {
+  // Tab State - 0: Overview, 1: My Reports, 2: Settings
+  int _selectedTabIndex = 0;
 
-  // Edit Mode State - Animated using AnimatedCrossFade or similar
+  // Edit Mode State
   bool _isEditing = false;
   late TextEditingController _nameController;
   late TextEditingController _countryController;
@@ -36,6 +42,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final user = context.read<AuthProvider>().currentUser;
     _nameController = TextEditingController(text: user?.displayName ?? '');
     _countryController = TextEditingController(text: user?.country ?? '');
+
+    // Load profile data (badges, stats, reports)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadProfileData();
+    });
+  }
+
+  void _loadProfileData() {
+    final user = context.read<AuthProvider>().currentUser;
+    if (user != null) {
+      context.read<ProfileProvider>().loadProfileData(
+            user.id,
+            streakDays: user.streakDays,
+          );
+    }
   }
 
   @override
@@ -46,14 +67,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _handleAvatarTap() async {
-    final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
+    final XFile? image = await _picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 512,
+      maxHeight: 512,
+      imageQuality: 85,
+    );
     if (image == null) return;
     if (!mounted) return;
+
+    // Get current avatar URL to clear from cache later
+    final oldAvatarUrl = context.read<AuthProvider>().currentUser?.avatarUrl;
 
     setState(() => _isUploadingImage = true);
 
     try {
       await context.read<AuthProvider>().uploadAvatar(File(image.path));
+
+      // Clear old avatar from image cache
+      if (oldAvatarUrl != null) {
+        imageCache.evict(oldAvatarUrl);
+      }
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -107,12 +142,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
-      // No app bar, custom header
       body: SafeArea(
         child: Column(
           children: [
             _buildHeader(context, user, primaryColor),
-            const SizedBox(height: 24),
+            const SizedBox(height: 16),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
               child: _buildTabSwitcher(context, primaryColor),
@@ -121,9 +155,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             Expanded(
               child: AnimatedSwitcher(
                 duration: 300.ms,
-                child: _showOverview
-                    ? _buildOverviewTab(context, user, primaryColor)
-                    : _buildCompetitionsTab(context, primaryColor),
+                child: _buildTabContent(context, user, primaryColor),
               ),
             ),
           ],
@@ -132,41 +164,55 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  Widget _buildTabContent(
+      BuildContext context, UserEntity user, Color primaryColor) {
+    switch (_selectedTabIndex) {
+      case 0:
+        return _buildOverviewTab(context, user, primaryColor);
+      case 1:
+        return const MyReportsTab();
+      case 2:
+        return const SettingsTab();
+      default:
+        return _buildOverviewTab(context, user, primaryColor);
+    }
+  }
+
   // --- Header Section ---
   Widget _buildHeader(
       BuildContext context, UserEntity user, Color primaryColor) {
-    // Determine Level based on reports
-    final level = user.reportsCount < 10 ? 'Ocean Scout' : 'Ocean Guardian';
+    final level = user.reportsCount < 10
+        ? 'Ocean Scout'
+        : user.reportsCount < 50
+            ? 'Ocean Guardian'
+            : 'Ocean Hero';
 
     return Container(
       padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
-      color: Colors.transparent, // Clean, no gradient
+      color: Colors.transparent,
       child: Column(
         children: [
           // Top Actions
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              // Back Button (if can pop)
               if (GoRouter.of(context).canPop())
                 IconButton(
                   onPressed: () => context.pop(),
-                  icon: const Icon(Icons.arrow_back),
+                  icon: const Icon(LucideIcons.arrowLeft),
                   style: IconButton.styleFrom(
                       backgroundColor:
                           Theme.of(context).cardColor.withValues(alpha: 0.5)),
                 )
               else
-                // Spacer to keep Edit button aligned right if no back button
                 const SizedBox(width: 48),
-
               IconButton(
                 icon: AnimatedSwitcher(
                   duration: 200.ms,
                   transitionBuilder: (child, anim) =>
                       ScaleTransition(scale: anim, child: child),
                   child: Icon(
-                    _isEditing ? Icons.check : Icons.edit_outlined,
+                    _isEditing ? LucideIcons.check : LucideIcons.pencil,
                     key: ValueKey(_isEditing),
                     color: primaryColor,
                   ),
@@ -184,68 +230,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ],
           ),
 
-          // Avatar
+          // Avatar with progress ring
           GestureDetector(
             onTap: _handleAvatarTap,
-            child: Stack(
-              alignment: Alignment.bottomRight,
-              children: [
-                Hero(
-                  tag: 'profile_avatar',
-                  child: Container(
-                    width: 110,
-                    height: 110,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: primaryColor,
-                      border: Border.all(
-                          color: Theme.of(context).cardColor, width: 4),
-                      boxShadow: [
-                        BoxShadow(
-                          color: primaryColor.withValues(alpha: 0.2),
-                          blurRadius: 16,
-                          offset: const Offset(0, 8),
-                        )
-                      ],
-                      image: user.avatarUrl != null
-                          ? DecorationImage(
-                              image: NetworkImage(user.avatarUrl!),
-                              fit: BoxFit.cover)
-                          : null,
-                    ),
-                    child: _isUploadingImage
-                        ? const Center(
-                            child:
-                                CircularProgressIndicator(color: Colors.white))
-                        : (user.avatarUrl == null
-                            ? Center(
-                                child: Text(
-                                  user.displayName?.isNotEmpty == true
-                                      ? user.displayName![0].toUpperCase()
-                                      : '?',
-                                  style: const TextStyle(
-                                      fontSize: 40,
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold),
-                                ),
-                              )
-                            : null),
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                      color: Theme.of(context).cardColor,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.1),
-                            blurRadius: 4),
-                      ]),
-                  child: Icon(Icons.camera_alt, color: primaryColor, size: 16),
-                ),
-              ],
-            ),
+            child: _buildAvatarWithProgress(context, user, primaryColor),
           ).animate().scale(duration: 400.ms, curve: Curves.easeOutBack),
 
           const SizedBox(height: 16),
@@ -277,24 +265,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 : CrossFadeState.showFirst,
           ),
 
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),
           Text(user.email,
               style: Theme.of(context)
                   .textTheme
-                  .bodyMedium
+                  .bodySmall
                   ?.copyWith(color: Colors.grey)),
 
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
 
           // Pills (Level & Org)
           Wrap(
             spacing: 8,
             alignment: WrapAlignment.center,
             children: [
-              _buildPill(
-                  context, level, Icons.verified_user_outlined, primaryColor),
+              _buildPill(context, level, LucideIcons.award, primaryColor),
               if (user.orgName != null)
-                _buildPill(context, user.orgName!, Icons.business,
+                _buildPill(context, user.orgName!, LucideIcons.building2,
                     Colors.indigoAccent),
             ],
           ).animate().fadeIn(delay: 200.ms).slideY(begin: 0.5),
@@ -309,6 +296,105 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ],
         ],
       ),
+    );
+  }
+
+  Widget _buildAvatarWithProgress(
+      BuildContext context, UserEntity user, Color primaryColor) {
+    // Calculate progress to next level
+    final progress = (user.reportsCount % 10) / 10;
+
+    // Letter placeholder widget
+    Widget letterPlaceholder() => Center(
+          child: Text(
+            user.displayName?.isNotEmpty == true
+                ? user.displayName![0].toUpperCase()
+                : '?',
+            style: const TextStyle(
+                fontSize: 36, color: Colors.white, fontWeight: FontWeight.bold),
+          ),
+        );
+
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        // Progress ring
+        SizedBox(
+          width: 120,
+          height: 120,
+          child: CircularProgressIndicator(
+            value: progress,
+            strokeWidth: 4,
+            backgroundColor: primaryColor.withValues(alpha: 0.1),
+            valueColor: AlwaysStoppedAnimation<Color>(primaryColor),
+          ),
+        ),
+        // Avatar
+        Hero(
+          tag: 'profile_avatar',
+          child: Container(
+            width: 100,
+            height: 100,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: primaryColor,
+              border:
+                  Border.all(color: Theme.of(context).cardColor, width: 4),
+              boxShadow: [
+                BoxShadow(
+                  color: primaryColor.withValues(alpha: 0.2),
+                  blurRadius: 16,
+                  offset: const Offset(0, 8),
+                )
+              ],
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: _isUploadingImage
+                ? const Center(
+                    child: CircularProgressIndicator(color: Colors.white))
+                : (user.avatarUrl != null
+                    ? Image.network(
+                        user.avatarUrl!,
+                        fit: BoxFit.cover,
+                        width: 100,
+                        height: 100,
+                        errorBuilder: (_, error, stackTrace) {
+                          debugPrint('[Avatar] Image load error: $error');
+                          return letterPlaceholder();
+                        },
+                        loadingBuilder: (context, child, loadingProgress) {
+                          if (loadingProgress == null) return child;
+                          return Center(
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              value: loadingProgress.expectedTotalBytes != null
+                                  ? loadingProgress.cumulativeBytesLoaded /
+                                      loadingProgress.expectedTotalBytes!
+                                  : null,
+                            ),
+                          );
+                        },
+                      )
+                    : letterPlaceholder()),
+          ),
+        ),
+        // Camera icon
+        Positioned(
+          bottom: 4,
+          right: 4,
+          child: Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+                color: Theme.of(context).cardColor,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.1), blurRadius: 4),
+                ]),
+            child: Icon(LucideIcons.camera, color: primaryColor, size: 14),
+          ),
+        ),
+      ],
     );
   }
 
@@ -356,7 +442,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               color: color.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(Icons.directions_boat_outlined, color: color),
+            child: Icon(LucideIcons.ship, color: color),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -405,37 +491,42 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // --- Tab Switcher ---
+  // --- Tab Switcher (3 tabs) ---
   Widget _buildTabSwitcher(BuildContext context, Color primaryColor) {
+    final tabs = ['Overview', 'My Reports', 'Settings'];
+
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-          color: Theme.of(context).cardColor, // Solid card color
+          color: Theme.of(context).cardColor,
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
                 color: Colors.black.withValues(alpha: 0.03), blurRadius: 4),
           ]),
       child: Row(
-        children: [
-          Expanded(
-              child: _buildTabBtn(
-                  context, 'Overview', _showOverview, primaryColor)),
-          Expanded(
-              child: _buildTabBtn(
-                  context, 'Competitions', !_showOverview, primaryColor)),
-        ],
+        children: tabs.asMap().entries.map((entry) {
+          return Expanded(
+            child: _buildTabBtn(
+              context,
+              entry.value,
+              _selectedTabIndex == entry.key,
+              primaryColor,
+              () => setState(() => _selectedTabIndex = entry.key),
+            ),
+          );
+        }).toList(),
       ),
     );
   }
 
-  Widget _buildTabBtn(
-      BuildContext context, String text, bool isActive, Color primaryColor) {
+  Widget _buildTabBtn(BuildContext context, String text, bool isActive,
+      Color primaryColor, VoidCallback onTap) {
     return GestureDetector(
-      onTap: () => setState(() => _showOverview = text == 'Overview'),
+      onTap: onTap,
       child: AnimatedContainer(
         duration: 200.ms,
-        padding: const EdgeInsets.symmetric(vertical: 12),
+        padding: const EdgeInsets.symmetric(vertical: 10),
         decoration: BoxDecoration(
           color: isActive ? primaryColor : Colors.transparent,
           borderRadius: BorderRadius.circular(12),
@@ -452,6 +543,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ?.color
                     ?.withValues(alpha: 0.5),
             fontWeight: FontWeight.w600,
+            fontSize: 13,
           ),
         ),
       ),
@@ -461,75 +553,88 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // --- Overview Tab ---
   Widget _buildOverviewTab(
       BuildContext context, UserEntity user, Color primaryColor) {
-    return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-      children: [
-        // Stats
-        Row(
-          children: [
-            Expanded(
-                child: _buildStatCard(context, Icons.delete_outline,
-                    '${user.reportsCount}', 'Collected', Colors.pinkAccent)),
-            const SizedBox(width: 12),
-            Expanded(
-                child: _buildStatCard(context, Icons.location_on_outlined,
-                    '${user.reportsCount}', 'Events', primaryColor)),
-            const SizedBox(width: 12),
-            Expanded(
-                child: _buildStatCard(
-                    context,
-                    Icons.water_drop_outlined,
-                    '${user.reportsCount * 10}',
-                    'Impact',
-                    Colors.lightBlueAccent)),
-          ],
-        ).animate().scale(duration: 300.ms, delay: 100.ms),
+    final profileProvider = context.watch<ProfileProvider>();
+    final stats = profileProvider.stats;
+    final badges = profileProvider.badges;
+    final isLoadingStats = profileProvider.isLoadingStats;
+    final isLoadingBadges = profileProvider.isLoadingBadges;
 
-        const SizedBox(height: 32),
-        Text('Achievements',
-            style: Theme.of(context)
-                .textTheme
-                .titleMedium
-                ?.copyWith(fontWeight: FontWeight.bold)),
-        const SizedBox(height: 16),
+    return RefreshIndicator(
+      onRefresh: () => profileProvider.refresh(),
+      child: ListView(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+        children: [
+          // Stats
+          _buildStatsSection(context, user, stats, isLoadingStats, primaryColor),
 
-        SizedBox(
-          height: 100,
-          child: ListView(
-            scrollDirection: Axis.horizontal,
+          const SizedBox(height: 32),
+
+          // Achievements Header
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _buildBadge(context, 'Early Bird', Icons.wb_sunny, Colors.orange),
-              _buildBadge(
-                  context, 'Team Player', Icons.handshake, Colors.amber),
-              _buildBadge(
-                  context, 'Plastic Free', Icons.recycling, Colors.green),
-              _buildBadge(
-                  context, 'Next Level', Icons.lock_outline, Colors.grey,
-                  isLocked: true),
+              Text('Achievements',
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleMedium
+                      ?.copyWith(fontWeight: FontWeight.bold)),
+              if (badges.isNotEmpty)
+                Text(
+                  '${badges.where((b) => b.isEarned).length}/${badges.length}',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Colors.grey,
+                      ),
+                ),
             ],
-          ).animate().slideX(
-              begin: 0.2,
-              duration: 400.ms,
-              delay: 200.ms,
-              curve: Curves.easeOut),
-        ),
-
-        const SizedBox(height: 48),
-        OutlinedButton.icon(
-          onPressed: () => context.read<AuthProvider>().signOut(),
-          icon: const Icon(Icons.logout, color: AppColors.error),
-          label: const Text('Log Out'),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: AppColors.error,
-            side: const BorderSide(color: AppColors.error),
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
-        ).animate().fadeIn(delay: 400.ms),
-        const SizedBox(height: 40),
-      ],
+          const SizedBox(height: 16),
+
+          // Badges
+          isLoadingBadges
+              ? const Center(child: CircularProgressIndicator())
+              : _buildBadgesSection(context, badges),
+
+          const SizedBox(height: 40),
+        ],
+      ),
     );
+  }
+
+  Widget _buildStatsSection(BuildContext context, UserEntity user,
+      UserStats stats, bool isLoading, Color primaryColor) {
+    return Row(
+      children: [
+        Expanded(
+          child: _buildStatCard(
+            context,
+            LucideIcons.fileText,
+            isLoading ? '...' : '${stats.reportsCount}',
+            'Reports',
+            Colors.pinkAccent,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: _buildStatCard(
+            context,
+            LucideIcons.flame,
+            isLoading ? '...' : '${stats.streakDays}',
+            'Day Streak',
+            Colors.orange,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: _buildStatCard(
+            context,
+            LucideIcons.trophy,
+            isLoading ? '...' : '#${stats.rank}',
+            'Rank',
+            primaryColor,
+          ),
+        ),
+      ],
+    ).animate().scale(duration: 300.ms, delay: 100.ms);
   }
 
   Widget _buildStatCard(BuildContext context, IconData icon, String value,
@@ -549,12 +654,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
       child: Column(
         children: [
-          Icon(icon, color: color, size: 28),
+          Icon(icon, color: color, size: 24),
           const SizedBox(height: 8),
           Text(value,
               style: Theme.of(context)
                   .textTheme
-                  .headlineSmall
+                  .titleLarge
                   ?.copyWith(fontWeight: FontWeight.bold)),
           Text(label,
               style: Theme.of(context)
@@ -566,11 +671,48 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildBadge(
-      BuildContext context, String name, IconData icon, Color color,
-      {bool isLocked = false}) {
+  Widget _buildBadgesSection(BuildContext context, List<BadgeEntity> badges) {
+    if (badges.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            children: [
+              Icon(LucideIcons.award,
+                  size: 48, color: Colors.grey.withValues(alpha: 0.3)),
+              const SizedBox(height: 12),
+              Text(
+                'No badges yet',
+                style: Theme.of(context)
+                    .textTheme
+                    .bodyMedium
+                    ?.copyWith(color: Colors.grey),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return SizedBox(
+      height: 100,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        itemCount: badges.length,
+        itemBuilder: (context, index) {
+          final badge = badges[index];
+          return _buildBadgeItem(context, badge);
+        },
+      ).animate().slideX(
+          begin: 0.2, duration: 400.ms, delay: 200.ms, curve: Curves.easeOut),
+    );
+  }
+
+  Widget _buildBadgeItem(BuildContext context, BadgeEntity badge) {
+    final iconData = _getBadgeIcon(badge.icon);
+
     return Container(
-      width: 72,
+      width: 80,
       margin: const EdgeInsets.only(right: 12),
       child: Column(
         children: [
@@ -578,19 +720,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
             height: 56,
             width: 56,
             decoration: BoxDecoration(
-              color: isLocked
-                  ? Colors.grey.withValues(alpha: 0.1)
-                  : color.withValues(alpha: 0.1),
+              color: badge.isEarned
+                  ? badge.color.withValues(alpha: 0.1)
+                  : Colors.grey.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(16),
+              border: badge.isEarned
+                  ? Border.all(color: badge.color.withValues(alpha: 0.3))
+                  : null,
             ),
-            child: Icon(icon, color: isLocked ? Colors.grey : color),
+            child: Icon(
+              badge.isEarned ? iconData : LucideIcons.lock,
+              color: badge.isEarned ? badge.color : Colors.grey,
+            ),
           ),
           const SizedBox(height: 8),
           Text(
-            name,
+            badge.name,
             textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600),
-            maxLines: 1,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: badge.isEarned ? null : Colors.grey,
+            ),
+            maxLines: 2,
             overflow: TextOverflow.ellipsis,
           )
         ],
@@ -598,20 +750,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // --- Competitions Tab (Placeholder) ---
-  Widget _buildCompetitionsTab(BuildContext context, Color primaryColor) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.emoji_events_outlined,
-              size: 64, color: Colors.grey.withValues(alpha: 0.3)),
-          const SizedBox(height: 16),
-          const Text('Competitions Coming Soon',
-              style: TextStyle(color: Colors.grey)),
-        ],
-      ),
-    ).animate().fadeIn();
+  IconData _getBadgeIcon(String iconName) {
+    switch (iconName) {
+      case 'award':
+        return LucideIcons.award;
+      case 'compass':
+        return LucideIcons.compass;
+      case 'shield':
+        return LucideIcons.shield;
+      case 'trophy':
+        return LucideIcons.trophy;
+      case 'flame':
+        return LucideIcons.flame;
+      case 'zap':
+        return LucideIcons.zap;
+      case 'users':
+        return LucideIcons.users;
+      case 'recycle':
+        return LucideIcons.recycle;
+      case 'sunrise':
+        return LucideIcons.sunrise;
+      default:
+        return LucideIcons.award;
+    }
   }
 }
 
@@ -683,7 +844,7 @@ class _VesselSwitcherSheetState extends State<_VesselSwitcherSheet> {
         children: [
           Row(
             children: [
-              const Icon(Icons.directions_boat_filled),
+              const Icon(LucideIcons.ship),
               const SizedBox(width: 12),
               Text('Select Vessel',
                   style: Theme.of(context).textTheme.headlineSmall),
@@ -713,9 +874,9 @@ class _VesselSwitcherSheetState extends State<_VesselSwitcherSheet> {
                             style: const TextStyle(color: Colors.grey))
                         : null,
                     trailing: isSelected
-                        ? Icon(Icons.check_circle,
+                        ? Icon(LucideIcons.checkCircle,
                             color: Theme.of(context).colorScheme.primary)
-                        : const Icon(Icons.circle_outlined, color: Colors.grey),
+                        : const Icon(LucideIcons.circle, color: Colors.grey),
                     onTap: () => _selectVessel(vessel),
                   );
                 },

@@ -50,8 +50,7 @@ class ReportDataSource {
     }
   }
 
-  /// Fetch reports within a bounding box (client-side filter for now)
-  /// TODO: Replace with PostGIS ST_Within RPC for server-side filtering
+  /// Fetch reports within a bounding box using PostGIS server-side filtering
   Future<List<Map<String, dynamic>>> fetchReportsInBounds({
     required double minLat,
     required double maxLat,
@@ -59,30 +58,87 @@ class ReportDataSource {
     required double maxLng,
     int limit = 500,
   }) async {
-    // For now, fetch all and filter client-side
-    // This is a temporary solution until we add PostGIS RPC
-    final allReports = await fetchReports();
+    try {
+      final response = await _supabase.rpc('get_reports_in_bounds', params: {
+        'min_lng': minLng,
+        'min_lat': minLat,
+        'max_lng': maxLng,
+        'max_lat': maxLat,
+        'max_results': limit,
+      });
 
-    return allReports
-        .where((report) {
-          final location = report['location'] as String?;
-          if (location == null) return false;
+      final reports = List<Map<String, dynamic>>.from(response);
 
-          // Parse POINT(lng lat) format
-          final match =
-              RegExp(r'POINT\(([-\d.]+) ([-\d.]+)\)').firstMatch(location);
-          if (match == null) return false;
+      // Fetch images for all reports and attach to each report
+      for (final report in reports) {
+        final reportId = report['id'] as String?;
+        if (reportId != null) {
+          try {
+            final images = await _supabase
+                .from('report_images')
+                .select('storage_path, is_primary')
+                .eq('report_id', reportId)
+                .order('is_primary', ascending: false);
 
-          final lng = double.tryParse(match.group(1) ?? '') ?? 0;
-          final lat = double.tryParse(match.group(2) ?? '') ?? 0;
+            final imageUrls = (images as List)
+                .map((img) => img['storage_path'] as String?)
+                .where((url) => url != null)
+                .cast<String>()
+                .toList();
 
-          return lat >= minLat &&
-              lat <= maxLat &&
-              lng >= minLng &&
-              lng <= maxLng;
-        })
-        .take(limit)
-        .toList();
+            report['image_urls'] = imageUrls;
+          } catch (_) {
+            report['image_urls'] = <String>[];
+          }
+        }
+      }
+
+      return reports;
+    } catch (e) {
+      // Fallback to client-side filtering if RPC doesn't exist yet
+      final allReports = await fetchReports();
+
+      return allReports
+          .where((report) {
+            final location = report['location'] as String?;
+            if (location == null) return false;
+
+            final match =
+                RegExp(r'POINT\(([-\d.]+) ([-\d.]+)\)').firstMatch(location);
+            if (match == null) return false;
+
+            final lng = double.tryParse(match.group(1) ?? '') ?? 0;
+            final lat = double.tryParse(match.group(2) ?? '') ?? 0;
+
+            return lat >= minLat &&
+                lat <= maxLat &&
+                lng >= minLng &&
+                lng <= maxLng;
+          })
+          .take(limit)
+          .toList();
+    }
+  }
+
+  /// Fetch reports for a specific user with optional status filtering
+  Future<List<Map<String, dynamic>>> fetchUserReports({
+    required String userId,
+    String? status,
+    int limit = 20,
+    int offset = 0,
+  }) async {
+    try {
+      final response = await _supabase.rpc('get_user_reports', params: {
+        'p_user_id': userId,
+        'p_status': status,
+        'p_limit': limit,
+        'p_offset': offset,
+      });
+
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      throw ServerException(message: e.toString());
+    }
   }
 
   Future<Map<String, dynamic>> createReport(Map<String, dynamic> data) async {

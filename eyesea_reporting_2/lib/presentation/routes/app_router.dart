@@ -5,6 +5,7 @@ import '../auth/login_screen.dart';
 import '../auth/sign_up_screen.dart';
 import '../onboarding/onboarding_screen.dart';
 import '../profile/profile_screen.dart';
+import '../leaderboard/leaderboard_screen.dart';
 import '../report/report_screen.dart';
 import '../report/camera_capture_screen.dart';
 import '../report/report_details_screen.dart';
@@ -12,6 +13,7 @@ import '../social_feed/social_feed_screen.dart';
 import '../providers/auth_provider.dart';
 import '../navigation/main_shell.dart';
 import '../events/events_screen.dart';
+import '../events/create_event_screen.dart';
 import '../splash/splash_screen.dart';
 
 class AppRouter {
@@ -134,13 +136,13 @@ class AppRouter {
                   ),
                 ],
               ),
-              // 5. Profile
+              // 5. Leaderboard (Profile moved to avatar in search bar)
               StatefulShellBranch(
                 routes: [
                   GoRoute(
-                    path: profile,
-                    name: 'profile',
-                    builder: (context, state) => const ProfileScreen(),
+                    path: '/leaderboard',
+                    name: 'leaderboard',
+                    builder: (context, state) => const LeaderboardScreen(),
                   ),
                 ],
               ),
@@ -207,6 +209,20 @@ class AppRouter {
               final imagePath = state.uri.queryParameters['imagePath'] ?? '';
               return ReportDetailsScreen(imagePath: imagePath);
             },
+          ),
+
+          // Profile Route (accessed via avatar in search bar)
+          GoRoute(
+            path: profile,
+            name: 'profile',
+            builder: (context, state) => const ProfileScreen(),
+          ),
+
+          // Create Event Route
+          GoRoute(
+            path: '/create-event',
+            name: 'create-event',
+            builder: (context, state) => const CreateEventScreen(),
           ),
         ],
         errorBuilder: (context, state) => Scaffold(

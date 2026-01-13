@@ -23,9 +23,10 @@ class FeedFilterControl extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
-      padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: isDark ? Colors.grey[850] : Colors.grey[200],
+        color: isDark
+            ? Colors.white.withValues(alpha: 0.05)
+            : Colors.black.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
@@ -74,21 +75,10 @@ class FeedFilterControl extends StatelessWidget {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           curve: Curves.easeInOut,
-          padding: const EdgeInsets.symmetric(vertical: 10),
+          padding: const EdgeInsets.symmetric(vertical: 12),
           decoration: BoxDecoration(
-            color: isSelected
-                ? (isDark ? AppColors.deepNavy : Colors.white)
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(8),
-            boxShadow: isSelected
-                ? [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.1),
-                      blurRadius: 4,
-                      offset: const Offset(0, 1),
-                    ),
-                  ]
-                : null,
+            color: isSelected ? AppColors.electricNavy : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -103,8 +93,8 @@ class FeedFilterControl extends StatelessWidget {
                 child: Text(
                   label,
                   style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
                     color: _getColor(isSelected, enabled, isDark),
                   ),
                   overflow: TextOverflow.ellipsis,
@@ -119,11 +109,15 @@ class FeedFilterControl extends StatelessWidget {
 
   Color _getColor(bool isSelected, bool enabled, bool isDark) {
     if (!enabled) {
-      return isDark ? Colors.grey[600]! : Colors.grey[400]!;
+      return isDark
+          ? Colors.white.withValues(alpha: 0.3)
+          : Colors.black.withValues(alpha: 0.3);
     }
     if (isSelected) {
-      return isDark ? Colors.white : AppColors.deepNavy;
+      return Colors.white;
     }
-    return isDark ? Colors.grey[400]! : Colors.grey[600]!;
+    return isDark
+        ? Colors.white.withValues(alpha: 0.6)
+        : Colors.black.withValues(alpha: 0.6);
   }
 }

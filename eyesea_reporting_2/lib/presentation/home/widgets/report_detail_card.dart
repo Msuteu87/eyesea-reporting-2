@@ -33,12 +33,12 @@ class ReportDetailCard extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+        color: isDark ? AppColors.darkSurface : AppColors.pureWhite,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.15),
-            blurRadius: 20,
+            color: Colors.black.withValues(alpha: 0.1),
+            blurRadius: 16,
             offset: const Offset(0, -4),
           ),
         ],
@@ -83,7 +83,7 @@ class ReportDetailCard extends StatelessWidget {
                           Icon(
                             typeIcon,
                             size: 18,
-                            color: AppColors.oceanBlue,
+                            color: AppColors.electricNavy,
                           ),
                           const SizedBox(width: 6),
                           Expanded(
@@ -300,7 +300,7 @@ class ReportDetailCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: AppColors.oceanBlue.withValues(alpha: 0.15),
+        color: AppColors.electricNavy.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
@@ -309,7 +309,7 @@ class ReportDetailCard extends StatelessWidget {
           Icon(
             icon,
             size: 14,
-            color: AppColors.oceanBlue,
+            color: AppColors.electricNavy,
           ),
           const SizedBox(width: 4),
           Text(
@@ -317,7 +317,7 @@ class ReportDetailCard extends StatelessWidget {
             style: const TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w600,
-              color: AppColors.oceanBlue,
+              color: AppColors.electricNavy,
             ),
           ),
         ],
@@ -406,7 +406,7 @@ class _RecoveryButton extends StatelessWidget {
       width: 40,
       height: 40,
       decoration: BoxDecoration(
-        color: Colors.green.withValues(alpha: 0.15),
+        color: AppColors.emerald.withValues(alpha: 0.15),
         shape: BoxShape.circle,
       ),
       child: IconButton(
@@ -415,7 +415,7 @@ class _RecoveryButton extends StatelessWidget {
         icon: const Icon(
           LucideIcons.checkCircle2,
           size: 22,
-          color: Colors.green,
+          color: AppColors.emerald,
         ),
         tooltip: 'Mark as Recovered',
       ),
