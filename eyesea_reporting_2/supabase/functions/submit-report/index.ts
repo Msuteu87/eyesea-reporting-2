@@ -4,10 +4,15 @@
  * Allows external applications to submit pollution reports via API.
  *
  * Endpoint: POST /functions/v1/submit-report
- * Headers: X-API-Key: <api_key>
+ *
+ * Authentication (any of these methods):
+ * - Header: X-API-Key: <api_key>
+ * - Header: Authorization: Bearer <api_key>
+ * - Body field: "api_key": "<api_key>"
  *
  * Request Body:
  * {
+ *   "api_key": string,         // Optional: API key (alternative to headers)
  *   "latitude": number,        // Required: -90 to 90
  *   "longitude": number,       // Required: -180 to 180
  *   "pollution_type": string,  // Required: plastic|oil|debris|sewage|fishing_gear|container|other
@@ -57,6 +62,7 @@ interface ImageData {
 }
 
 interface ReportRequest {
+  api_key?: string; // Alternative to header authentication
   latitude: number;
   longitude: number;
   pollution_type: string;
@@ -88,10 +94,32 @@ serve(async (req: Request): Promise<Response> => {
   }
 
   try {
-    // 1. Validate API Key
-    const apiKey = req.headers.get("x-api-key");
+    // 1. Parse request body first (needed to check for api_key in body)
+    let body: ReportRequest;
+    try {
+      body = await req.json();
+    } catch {
+      return errorResponse(400, "INVALID_JSON", "Request body must be valid JSON");
+    }
+
+    // 2. Extract API Key from headers only (not body - security best practice)
+    // Priority: X-API-Key header > Authorization Bearer
+    let apiKey = req.headers.get("x-api-key");
+
     if (!apiKey) {
-      return errorResponse(401, "MISSING_API_KEY", "X-API-Key header is required");
+      // Try Authorization: Bearer header
+      const authHeader = req.headers.get("authorization");
+      if (authHeader?.startsWith("Bearer ")) {
+        apiKey = authHeader.substring(7); // Remove "Bearer " prefix
+      }
+    }
+
+    if (!apiKey) {
+      return errorResponse(
+        401,
+        "MISSING_API_KEY",
+        "API key required. Use X-API-Key header or Authorization: Bearer header"
+      );
     }
 
     // Initialize Supabase client with service role key
@@ -105,14 +133,14 @@ serve(async (req: Request): Promise<Response> => {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Validate the API key using database function
+    // 3. Validate the API key using database function
     const { data: keyValidation, error: keyError } = await supabase.rpc(
       "validate_api_key",
       { p_key: apiKey }
     );
 
     if (keyError) {
-      console.error("API key validation error:", keyError);
+      console.error("API key validation error:", keyError.message);
       return errorResponse(500, "VALIDATION_ERROR", "Failed to validate API key");
     }
 
@@ -130,14 +158,6 @@ serve(async (req: Request): Promise<Response> => {
 
     const sourceName = validationResult.key_name;
     console.log(`API request from: ${sourceName}`);
-
-    // 2. Parse and validate request body
-    let body: ReportRequest;
-    try {
-      body = await req.json();
-    } catch {
-      return errorResponse(400, "INVALID_JSON", "Request body must be valid JSON");
-    }
 
     const validation = validateRequest(body);
     if (!validation.valid) {
@@ -369,6 +389,35 @@ function validateRequest(body: ReportRequest): ValidationResult {
         };
       }
     }
+  }
+
+  // Validate optional string fields (prevent excessively long inputs)
+  const MAX_NOTES_LENGTH = 2000;
+  const MAX_CITY_LENGTH = 100;
+  const MAX_COUNTRY_LENGTH = 100;
+
+  if (body.notes && typeof body.notes === "string" && body.notes.length > MAX_NOTES_LENGTH) {
+    return {
+      valid: false,
+      message: `notes must be ${MAX_NOTES_LENGTH} characters or less`,
+      field: "notes",
+    };
+  }
+
+  if (body.city && typeof body.city === "string" && body.city.length > MAX_CITY_LENGTH) {
+    return {
+      valid: false,
+      message: `city must be ${MAX_CITY_LENGTH} characters or less`,
+      field: "city",
+    };
+  }
+
+  if (body.country && typeof body.country === "string" && body.country.length > MAX_COUNTRY_LENGTH) {
+    return {
+      valid: false,
+      message: `country must be ${MAX_COUNTRY_LENGTH} characters or less`,
+      field: "country",
+    };
   }
 
   return { valid: true };

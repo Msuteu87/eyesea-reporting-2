@@ -1,14 +1,15 @@
 import 'dart:async';
 import 'dart:developer';
 import 'package:flutter/foundation.dart';
+import 'package:geolocator/geolocator.dart' as geo;
 import '../../core/services/connectivity_service.dart';
 import '../../domain/entities/feed_item.dart';
 import '../../domain/repositories/social_feed_repository.dart';
 
 /// Filter options for the social feed
-enum FeedFilter { world, country, city }
+enum FeedFilter { nearby, country, city, world }
 
-/// Provider for managing social feed state
+/// Provider for managing social feed state with automatic proximity-first filtering
 class SocialFeedProvider extends ChangeNotifier {
   final SocialFeedRepository _repository;
   final ConnectivityService _connectivityService;
@@ -17,11 +18,21 @@ class SocialFeedProvider extends ChangeNotifier {
   bool _isLoading = false;
   bool _hasMore = true;
   String? _error;
-  FeedFilter _currentFilter = FeedFilter.world;
+  FeedFilter _currentFilter = FeedFilter.nearby; // Default to nearby
   String? _filterCountry;
   String? _filterCity;
   String? _currentUserId;
   StreamSubscription<bool>? _connectivitySubscription;
+
+  // Location tracking for proximity filtering
+  double? _userLatitude;
+  double? _userLongitude;
+  int _currentRadiusKm = 50; // Start with 50km
+  bool _locationAvailable = false;
+
+  // Auto-expand radius thresholds
+  static const List<int> _radiusSteps = [50, 100, 250, 500, 1000];
+  static const int _minItemsBeforeExpand = 5;
 
   static const int _pageSize = 20;
   int _currentOffset = 0;
@@ -46,6 +57,8 @@ class SocialFeedProvider extends ChangeNotifier {
   bool get isOffline => !_connectivityService.isOnline;
   String? get filterCountry => _filterCountry;
   String? get filterCity => _filterCity;
+  int get currentRadiusKm => _currentRadiusKm;
+  bool get isUsingProximity => _locationAvailable && _currentFilter == FeedFilter.nearby;
 
   /// Set the current user info for thank tracking and location filtering
   void setCurrentUser(String? userId, String? country, String? city) {
@@ -55,16 +68,62 @@ class SocialFeedProvider extends ChangeNotifier {
     log('Set current user: id=$userId, country=$country, city=$city');
   }
 
+  /// Set user's current location for proximity filtering
+  Future<void> setUserLocation(double latitude, double longitude) async {
+    _userLatitude = latitude;
+    _userLongitude = longitude;
+    _locationAvailable = true;
+    _currentRadiusKm = _radiusSteps.first; // Reset to smallest radius
+    log('Set user location: lat=$latitude, lng=$longitude');
+  }
+
+  /// Initialize location from device GPS
+  Future<void> initializeLocation() async {
+    try {
+      final permission = await geo.Geolocator.checkPermission();
+      if (permission == geo.LocationPermission.denied ||
+          permission == geo.LocationPermission.deniedForever) {
+        log('Location permission denied, falling back to country filter');
+        _locationAvailable = false;
+        if (_currentFilter == FeedFilter.nearby) {
+          _currentFilter = _filterCountry != null ? FeedFilter.country : FeedFilter.world;
+        }
+        return;
+      }
+
+      final position = await geo.Geolocator.getCurrentPosition(
+        locationSettings: const geo.LocationSettings(
+          accuracy: geo.LocationAccuracy.low, // Low accuracy is faster and sufficient
+          timeLimit: Duration(seconds: 10),
+        ),
+      );
+
+      _userLatitude = position.latitude;
+      _userLongitude = position.longitude;
+      _locationAvailable = true;
+      _currentRadiusKm = _radiusSteps.first;
+      log('Initialized location: lat=${position.latitude}, lng=${position.longitude}');
+    } catch (e) {
+      log('Failed to get location: $e');
+      _locationAvailable = false;
+      // Fall back to country filter if location fails
+      if (_currentFilter == FeedFilter.nearby) {
+        _currentFilter = _filterCountry != null ? FeedFilter.country : FeedFilter.world;
+      }
+    }
+  }
+
   /// Update the current filter and reload feed
   void setFilter(FeedFilter filter) {
     if (_currentFilter != filter) {
       log('Filter changed from $_currentFilter to $filter');
       _currentFilter = filter;
+      _currentRadiusKm = _radiusSteps.first; // Reset radius on filter change
       loadFeed(refresh: true);
     }
   }
 
-  /// Load or refresh the social feed
+  /// Load or refresh the social feed with automatic proximity expansion
   Future<void> loadFeed({bool refresh = false}) async {
     if (!_connectivityService.isOnline) {
       _error = 'You are offline. Connect to the internet to view the feed.';
@@ -79,13 +138,13 @@ class SocialFeedProvider extends ChangeNotifier {
       _currentOffset = 0;
       _hasMore = true;
       _error = null;
+      _currentRadiusKm = _radiusSteps.first; // Reset radius on refresh
     }
 
     if (!_hasMore && !refresh) return;
 
     _isLoading = true;
     if (refresh) {
-      // Don't clear items immediately to avoid flash
       _error = null;
     }
     notifyListeners();
@@ -93,11 +152,23 @@ class SocialFeedProvider extends ChangeNotifier {
     try {
       String? country;
       String? city;
+      double? latitude;
+      double? longitude;
+      int? radiusKm;
 
       switch (_currentFilter) {
-        case FeedFilter.world:
-          country = null;
-          city = null;
+        case FeedFilter.nearby:
+          if (_locationAvailable && _userLatitude != null && _userLongitude != null) {
+            latitude = _userLatitude;
+            longitude = _userLongitude;
+            radiusKm = _currentRadiusKm;
+            country = null;
+            city = null;
+          } else {
+            // Fallback to country if no location
+            country = _filterCountry;
+            city = null;
+          }
           break;
         case FeedFilter.country:
           country = _filterCountry;
@@ -107,19 +178,37 @@ class SocialFeedProvider extends ChangeNotifier {
           country = _filterCountry;
           city = _filterCity;
           break;
+        case FeedFilter.world:
+          country = null;
+          city = null;
+          break;
       }
 
-      log('Loading feed: filter=$_currentFilter, country=$country, city=$city, offset=$_currentOffset');
+      log('Loading feed: filter=$_currentFilter, lat=$latitude, lng=$longitude, radius=${radiusKm}km, country=$country, city=$city, offset=$_currentOffset');
 
       final data = await _repository.fetchFeed(
         userId: _currentUserId,
         country: country,
         city: city,
+        latitude: latitude,
+        longitude: longitude,
+        radiusKm: radiusKm,
         limit: _pageSize,
         offset: _currentOffset,
       );
 
-      final newItems = data.map((json) => FeedItem.fromJson(json)).toList();
+      var newItems = data.map((json) => FeedItem.fromJson(json)).toList();
+
+      // Auto-expand radius if using proximity and got too few results
+      if (_currentFilter == FeedFilter.nearby &&
+          _locationAvailable &&
+          refresh &&
+          newItems.length < _minItemsBeforeExpand) {
+        final expandedItems = await _tryExpandRadius(newItems);
+        if (expandedItems != null) {
+          newItems = expandedItems;
+        }
+      }
 
       if (refresh) {
         _items = newItems;
@@ -131,7 +220,7 @@ class SocialFeedProvider extends ChangeNotifier {
       _currentOffset += newItems.length;
       _error = null;
 
-      log('Loaded ${newItems.length} items, total: ${_items.length}, hasMore: $_hasMore');
+      log('Loaded ${newItems.length} items, total: ${_items.length}, hasMore: $_hasMore, radius: ${_currentRadiusKm}km');
     } catch (e) {
       log('Error loading feed: $e');
       _error = 'Failed to load feed. Please try again.';
@@ -139,6 +228,71 @@ class SocialFeedProvider extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  /// Try expanding the search radius to find more results
+  /// Returns expanded items if successful, null if no expansion needed/possible
+  Future<List<FeedItem>?> _tryExpandRadius(List<FeedItem> currentItems) async {
+    if (_userLatitude == null || _userLongitude == null) return null;
+
+    // Find current radius index
+    final currentIndex = _radiusSteps.indexOf(_currentRadiusKm);
+    if (currentIndex == -1 || currentIndex >= _radiusSteps.length - 1) {
+      // Already at max radius or invalid
+      log('Cannot expand radius: already at max or invalid (${_currentRadiusKm}km)');
+      return null;
+    }
+
+    // Try each larger radius until we get enough items or run out of options
+    for (int i = currentIndex + 1; i < _radiusSteps.length; i++) {
+      final nextRadius = _radiusSteps[i];
+
+      // Check how many reports exist in this radius
+      final count = await _repository.countReportsInRadius(
+        latitude: _userLatitude!,
+        longitude: _userLongitude!,
+        radiusKm: nextRadius,
+      );
+
+      log('Checking radius ${nextRadius}km: $count reports available');
+
+      if (count >= _minItemsBeforeExpand) {
+        // Found a radius with enough items, fetch them
+        _currentRadiusKm = nextRadius;
+
+        final data = await _repository.fetchFeed(
+          userId: _currentUserId,
+          latitude: _userLatitude,
+          longitude: _userLongitude,
+          radiusKm: nextRadius,
+          limit: _pageSize,
+          offset: 0,
+        );
+
+        log('Expanded to ${nextRadius}km radius, got ${data.length} items');
+        return data.map((json) => FeedItem.fromJson(json)).toList();
+      }
+    }
+
+    // No radius had enough items, use the largest one
+    final maxRadius = _radiusSteps.last;
+    if (_currentRadiusKm != maxRadius) {
+      _currentRadiusKm = maxRadius;
+
+      final data = await _repository.fetchFeed(
+        userId: _currentUserId,
+        latitude: _userLatitude,
+        longitude: _userLongitude,
+        radiusKm: maxRadius,
+        limit: _pageSize,
+        offset: 0,
+      );
+
+      log('Expanded to max radius ${maxRadius}km, got ${data.length} items');
+      return data.map((json) => FeedItem.fromJson(json)).toList();
+    }
+
+    return null;
   }
 
   /// Toggle thank status for a report (optimistic update)

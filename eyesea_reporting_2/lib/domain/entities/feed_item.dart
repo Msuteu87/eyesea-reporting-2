@@ -3,7 +3,7 @@ import 'report.dart';
 /// Represents a single item in the social feed
 class FeedItem {
   final String id;
-  final String userId;
+  final String? userId;
   final String? displayName;
   final String? avatarUrl;
   final String? city;
@@ -22,7 +22,7 @@ class FeedItem {
 
   const FeedItem({
     required this.id,
-    required this.userId,
+    this.userId,
     this.displayName,
     this.avatarUrl,
     this.city,
@@ -130,7 +130,7 @@ class FeedItem {
 
     return FeedItem(
       id: json['id'] as String,
-      userId: json['user_id'] as String,
+      userId: json['user_id'] as String?,
       displayName: json['display_name'] as String?,
       avatarUrl: json['avatar_url'] as String?,
       city: json['city'] as String?,
@@ -139,7 +139,7 @@ class FeedItem {
       severity: json['severity'] as int? ?? 3,
       status: status,
       notes: json['notes'] as String?,
-      reportedAt: DateTime.parse(json['reported_at'] as String),
+      reportedAt: DateTime.tryParse(json['reported_at'] as String? ?? '') ?? DateTime.now(),
       totalWeightKg: (json['total_weight_kg'] as num?)?.toDouble(),
       pollutionCounts: pollutionCountsMap,
       imageUrl: json['image_url'] as String?,

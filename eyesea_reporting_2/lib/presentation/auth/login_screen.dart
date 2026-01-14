@@ -216,6 +216,13 @@ class _LoginScreenState extends State<LoginScreen> {
                                       Validators.validatePassword(value,
                                           minLength: 6),
                                 ),
+
+                                // TODO: [FEATURE] Implement forgot password feature
+                                // - Add "Forgot Password?" link aligned to the right
+                                // - Navigate to password reset screen or show dialog
+                                // - Use Supabase resetPasswordForEmail() method
+                                // - Handle success/error states with snackbar feedback
+
                                 const SizedBox(height: 20),
                                 FilledButton(
                                   onPressed:

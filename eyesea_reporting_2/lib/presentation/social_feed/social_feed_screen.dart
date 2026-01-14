@@ -25,7 +25,7 @@ class _SocialFeedScreenState extends State<SocialFeedScreen> {
     });
   }
 
-  void _initializeFeed() {
+  Future<void> _initializeFeed() async {
     final auth = context.read<AuthProvider>();
     final feed = context.read<SocialFeedProvider>();
 
@@ -34,7 +34,12 @@ class _SocialFeedScreenState extends State<SocialFeedScreen> {
       auth.currentUser?.country,
       auth.currentUser?.city,
     );
-    feed.loadFeed(refresh: true);
+
+    // Initialize location for proximity-based filtering (non-blocking)
+    await feed.initializeLocation();
+    if (mounted) {
+      feed.loadFeed(refresh: true);
+    }
   }
 
   @override
@@ -330,6 +335,8 @@ class _SocialFeedScreenState extends State<SocialFeedScreen> {
   String _getEmptyStateMessage() {
     final provider = context.read<SocialFeedProvider>();
     switch (provider.currentFilter) {
+      case FeedFilter.nearby:
+        return 'No reports nearby yet. Expand your search or be the first to report!';
       case FeedFilter.city:
         return 'No reports in your city yet. Be the first to report pollution!';
       case FeedFilter.country:

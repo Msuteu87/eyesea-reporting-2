@@ -47,13 +47,11 @@ class EventEntity {
       address: json['address'] as String?,
       lat: (json['location_lat'] as num?)?.toDouble(),
       lng: (json['location_lng'] as num?)?.toDouble(),
-      startTime: DateTime.parse(json['start_time'] as String),
-      endTime: DateTime.parse(json['end_time'] as String),
+      startTime: DateTime.tryParse(json['start_time'] as String? ?? '') ?? DateTime.now(),
+      endTime: DateTime.tryParse(json['end_time'] as String? ?? '') ?? DateTime.now().add(const Duration(hours: 2)),
       maxAttendees: json['max_attendees'] as int?,
       status: json['status'] as String? ?? 'planned',
-      createdAt: json['created_at'] != null
-          ? DateTime.parse(json['created_at'] as String)
-          : DateTime.now(),
+      createdAt: DateTime.tryParse(json['created_at'] as String? ?? '') ?? DateTime.now(),
       attendeeCount: (json['attendee_count'] as num?)?.toInt() ?? 0,
       isAttending: json['is_attending'] as bool? ?? false,
     );

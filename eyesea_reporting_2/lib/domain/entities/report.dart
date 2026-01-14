@@ -216,7 +216,7 @@ class ReportEntity {
       status: status,
       notes: json['notes'] as String?,
       isAnonymous: json['is_anonymous'] as bool? ?? false,
-      reportedAt: DateTime.parse(json['reported_at'] as String),
+      reportedAt: DateTime.tryParse(json['reported_at'] as String? ?? '') ?? DateTime.now(),
       imageUrls:
           (json['image_urls'] as List?)?.map((e) => e.toString()).toList() ??
               const [],

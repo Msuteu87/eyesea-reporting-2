@@ -10,20 +10,27 @@ class SocialFeedDataSource {
 
   /// Fetch social feed with optional filters
   /// Returns paginated feed items with thank counts and user thank status
+  /// Supports proximity-based filtering with latitude, longitude, and radius
   Future<List<Map<String, dynamic>>> fetchFeed({
     String? userId,
     String? country,
     String? city,
+    double? latitude,
+    double? longitude,
+    int? radiusKm,
     int limit = 20,
     int offset = 0,
   }) async {
     try {
-      log('Fetching social feed: country=$country, city=$city, limit=$limit, offset=$offset');
+      log('Fetching social feed: lat=$latitude, lng=$longitude, radius=${radiusKm}km, country=$country, city=$city, limit=$limit, offset=$offset');
 
       final response = await _supabase.rpc('get_social_feed', params: {
         'p_user_id': userId,
         'p_country': country,
         'p_city': city,
+        'p_latitude': latitude,
+        'p_longitude': longitude,
+        'p_radius_km': radiusKm,
         'p_limit': limit,
         'p_offset': offset,
       });
@@ -34,6 +41,25 @@ class SocialFeedDataSource {
     } catch (e) {
       log('Error fetching social feed: $e');
       throw ServerException(message: e.toString());
+    }
+  }
+
+  /// Count reports within a radius (for auto-expand logic)
+  Future<int> countReportsInRadius({
+    required double latitude,
+    required double longitude,
+    required int radiusKm,
+  }) async {
+    try {
+      final response = await _supabase.rpc('count_reports_in_radius', params: {
+        'p_latitude': latitude,
+        'p_longitude': longitude,
+        'p_radius_km': radiusKm,
+      });
+      return response as int? ?? 0;
+    } catch (e) {
+      log('Error counting reports in radius: $e');
+      return 0;
     }
   }
 

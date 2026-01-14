@@ -4,7 +4,7 @@
 
 The Eyesea External Reporting API allows partner applications to submit marine pollution reports programmatically. Reports submitted via the API follow the same verification and display workflow as reports submitted through the mobile app.
 
-**Base URL:** `https://xqbnlvstjkmvqzdkuqpi.supabase.co/functions/v1`
+**Base URL:** `https://mjjqbzbudaggnpqevtwp.supabase.co/functions/v1`
 
 ---
 
@@ -21,11 +21,28 @@ Contact the Eyesea team to request an API key for your application. Each API key
 
 ### Using Your API Key
 
-Include your API key in the `X-API-Key` header with every request:
+You can provide your API key using any of these methods (in order of priority):
 
+**Option 1: X-API-Key Header (Recommended)**
 ```
 X-API-Key: eyesea_your_api_key_here
 ```
+
+**Option 2: Authorization Bearer Header**
+```
+Authorization: Bearer eyesea_your_api_key_here
+```
+
+**Option 3: Request Body Field**
+```json
+{
+  "api_key": "eyesea_your_api_key_here",
+  "latitude": 37.7749,
+  ...
+}
+```
+
+> **Note:** Options 2 and 3 are useful when calling from environments that strip custom headers (e.g., Supabase Edge Functions calling other Edge Functions).
 
 > **Security Note:** Keep your API key confidential. Do not expose it in client-side code, public repositories, or logs.
 
@@ -140,7 +157,7 @@ Or be raw base64:
     "status": "pending",
     "image_count": 1,
     "image_urls": [
-      "https://xqbnlvstjkmvqzdkuqpi.supabase.co/storage/v1/object/public/report-images/api/YourPartner/550e8400.../2026-01-14T10-30-00-000Z_0.jpeg"
+      "https://mjjqbzbudaggnpqevtwp.supabase.co/storage/v1/object/public/report-images/api/YourPartner/550e8400.../2026-01-14T10-30-00-000Z_0.jpeg"
     ],
     "created_at": "2026-01-14T10:30:00.000Z"
   }
@@ -243,7 +260,7 @@ Your `source_reference` can be used to track which reports in your system corres
 ### cURL
 
 ```bash
-curl -X POST https://xqbnlvstjkmvqzdkuqpi.supabase.co/functions/v1/submit-report \
+curl -X POST https://mjjqbzbudaggnpqevtwp.supabase.co/functions/v1/submit-report \
   -H "Content-Type: application/json" \
   -H "X-API-Key: eyesea_your_api_key_here" \
   -d '{
@@ -266,7 +283,7 @@ import requests
 import base64
 
 API_KEY = "eyesea_your_api_key_here"
-BASE_URL = "https://xqbnlvstjkmvqzdkuqpi.supabase.co/functions/v1"
+BASE_URL = "https://mjjqbzbudaggnpqevtwp.supabase.co/functions/v1"
 
 def submit_report(image_path, latitude, longitude, pollution_type, severity, notes=None):
     # Read and encode image
@@ -315,7 +332,7 @@ else:
 const fs = require('fs');
 
 const API_KEY = 'eyesea_your_api_key_here';
-const BASE_URL = 'https://xqbnlvstjkmvqzdkuqpi.supabase.co/functions/v1';
+const BASE_URL = 'https://mjjqbzbudaggnpqevtwp.supabase.co/functions/v1';
 
 async function submitReport(imagePath, latitude, longitude, pollutionType, severity, notes) {
   // Read and encode image
@@ -367,7 +384,7 @@ import Foundation
 
 struct EyeseaAPI {
     static let apiKey = "eyesea_your_api_key_here"
-    static let baseURL = "https://xqbnlvstjkmvqzdkuqpi.supabase.co/functions/v1"
+    static let baseURL = "https://mjjqbzbudaggnpqevtwp.supabase.co/functions/v1"
 
     static func submitReport(
         imageData: Data,
@@ -413,7 +430,7 @@ import java.util.Base64
 
 object EyeseaAPI {
     private const val API_KEY = "eyesea_your_api_key_here"
-    private const val BASE_URL = "https://xqbnlvstjkmvqzdkuqpi.supabase.co/functions/v1"
+    private const val BASE_URL = "https://mjjqbzbudaggnpqevtwp.supabase.co/functions/v1"
 
     private val client = OkHttpClient()
 

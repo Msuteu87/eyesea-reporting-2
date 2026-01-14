@@ -12,6 +12,9 @@ class SocialFeedRepositoryImpl implements SocialFeedRepository {
     String? userId,
     String? country,
     String? city,
+    double? latitude,
+    double? longitude,
+    int? radiusKm,
     int limit = 20,
     int offset = 0,
   }) {
@@ -19,8 +22,24 @@ class SocialFeedRepositoryImpl implements SocialFeedRepository {
       userId: userId,
       country: country,
       city: city,
+      latitude: latitude,
+      longitude: longitude,
+      radiusKm: radiusKm,
       limit: limit,
       offset: offset,
+    );
+  }
+
+  @override
+  Future<int> countReportsInRadius({
+    required double latitude,
+    required double longitude,
+    required int radiusKm,
+  }) {
+    return _dataSource.countReportsInRadius(
+      latitude: latitude,
+      longitude: longitude,
+      radiusKm: radiusKm,
     );
   }
 

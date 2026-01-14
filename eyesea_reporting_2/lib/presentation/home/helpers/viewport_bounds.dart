@@ -36,15 +36,18 @@ class ViewportBounds {
         maxLng: map['maxLng']!,
       );
 
-  /// Create bounds with buffer applied
+  /// Create bounds with buffer applied.
+  /// Results are clamped to valid geographic coordinates:
+  /// - Latitude: -90 to 90
+  /// - Longitude: -180 to 180
   ViewportBounds withBuffer(double bufferPercent) {
     final latBuffer = latRange * bufferPercent;
     final lngBuffer = lngRange * bufferPercent;
     return ViewportBounds(
-      minLat: minLat - latBuffer,
-      maxLat: maxLat + latBuffer,
-      minLng: minLng - lngBuffer,
-      maxLng: maxLng + lngBuffer,
+      minLat: (minLat - latBuffer).clamp(-90.0, 90.0),
+      maxLat: (maxLat + latBuffer).clamp(-90.0, 90.0),
+      minLng: (minLng - lngBuffer).clamp(-180.0, 180.0),
+      maxLng: (maxLng + lngBuffer).clamp(-180.0, 180.0),
     );
   }
 

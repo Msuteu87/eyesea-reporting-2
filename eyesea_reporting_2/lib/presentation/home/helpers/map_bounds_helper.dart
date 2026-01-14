@@ -73,11 +73,20 @@ class MapBoundsHelper {
         currentZoom == lastZoom;
   }
 
+  /// Threshold for considering bounds as "near-global" (covers most of Earth).
+  /// When fetched bounds cover more than this percentage of Earth's surface,
+  /// zoomed-in viewports should trigger "search this area".
+  static const double nearGlobalThreshold = 0.7;
+
   /// Check if current viewport is significantly outside previously fetched bounds.
   ///
   /// Returns true if less than [overlapThreshold] (default 80%) of current
   /// viewport overlaps with fetched bounds, indicating "search this area"
   /// button should appear.
+  ///
+  /// Also handles the edge case where fetched bounds cover most of the world
+  /// (from max zoom-out search) - in that case, zoomed-in viewports should
+  /// still trigger the search button.
   static bool isOutsideFetchedBounds(
     ViewportBounds current,
     ViewportBounds? fetched, {
@@ -85,14 +94,29 @@ class MapBoundsHelper {
   }) {
     if (fetched == null) return false;
 
+    // Calculate areas
+    final currentArea = current.latRange * current.lngRange;
+    if (currentArea <= 0) return false;
+
+    final fetchedArea = fetched.latRange * fetched.lngRange;
+
+    // Max possible area: 180 (lat) * 360 (lng) = 64800
+    const maxWorldArea = 180.0 * 360.0;
+
+    // If fetched bounds cover most of the world (from max zoom-out search)
+    // and current viewport is significantly smaller, show the search button.
+    // This fixes the bug where zooming out to max, searching, then zooming in
+    // would never show the search button again.
+    if (fetchedArea > maxWorldArea * nearGlobalThreshold &&
+        currentArea < fetchedArea * 0.5) {
+      return true;
+    }
+
     // Calculate overlap area
     final overlapMinLat = current.minLat.clamp(fetched.minLat, fetched.maxLat);
     final overlapMaxLat = current.maxLat.clamp(fetched.minLat, fetched.maxLat);
     final overlapMinLng = current.minLng.clamp(fetched.minLng, fetched.maxLng);
     final overlapMaxLng = current.maxLng.clamp(fetched.minLng, fetched.maxLng);
-
-    final currentArea = current.latRange * current.lngRange;
-    if (currentArea <= 0) return false;
 
     final overlapHeight = (overlapMaxLat - overlapMinLat).clamp(0.0, double.infinity);
     final overlapWidth = (overlapMaxLng - overlapMinLng).clamp(0.0, double.infinity);

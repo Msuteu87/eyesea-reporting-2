@@ -33,9 +33,9 @@ class FeedFilterControl extends StatelessWidget {
         children: [
           _buildSegment(
             context,
-            filter: FeedFilter.world,
-            icon: LucideIcons.globe,
-            label: 'World',
+            filter: FeedFilter.nearby,
+            icon: LucideIcons.radar,
+            label: 'Nearby',
             isDark: isDark,
           ),
           _buildSegment(
@@ -48,11 +48,10 @@ class FeedFilterControl extends StatelessWidget {
           ),
           _buildSegment(
             context,
-            filter: FeedFilter.city,
-            icon: LucideIcons.mapPin,
-            label: cityName ?? 'City',
+            filter: FeedFilter.world,
+            icon: LucideIcons.globe,
+            label: 'World',
             isDark: isDark,
-            enabled: cityName != null,
           ),
         ],
       ),
