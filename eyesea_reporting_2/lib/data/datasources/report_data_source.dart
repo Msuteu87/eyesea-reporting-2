@@ -2,6 +2,7 @@ import 'dart:developer';
 import 'dart:io';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/errors/exceptions.dart';
+import '../../core/utils/logger.dart';
 
 /// Data source for report CRUD operations.
 class ReportDataSource {
@@ -26,7 +27,8 @@ class ReportDataSource {
           .where((url) => url != null)
           .cast<String>()
           .toList();
-    } catch (_) {
+    } catch (e) {
+      AppLogger.warning('Failed to fetch images for report $reportId: $e');
       report['image_urls'] = <String>[];
     }
   }

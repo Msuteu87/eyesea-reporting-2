@@ -68,6 +68,10 @@ class ReportQueueService {
 
     AppLogger.info('Report queue initialized with ${_box!.length} items');
 
+    // Recover any reports stuck in 'syncing' state (e.g., from app crash/kill)
+    // This prevents reports from being permanently stuck and ensures they retry
+    await _recoverStuckReports();
+
     // Listen for connectivity changes
     _connectivitySubscription =
         _connectivityService.onConnectivityChanged.listen((isOnline) {
@@ -162,6 +166,26 @@ class ReportQueueService {
         [];
   }
 
+  /// Recover reports stuck in 'syncing' state (e.g., from app crash during sync).
+  /// Resets them to 'pending' so they can be retried.
+  Future<void> _recoverStuckReports() async {
+    if (_box == null) return;
+
+    final stuckReports =
+        _box!.values.where((r) => r.syncStatus == SyncStatus.syncing).toList();
+
+    if (stuckReports.isEmpty) return;
+
+    AppLogger.info('Recovering ${stuckReports.length} reports stuck in syncing state');
+
+    for (final report in stuckReports) {
+      report.syncStatus = SyncStatus.pending;
+      await report.save();
+    }
+
+    _notifyPendingCount();
+  }
+
   /// Sync all pending reports to Supabase
   Future<void> syncPendingReports() async {
     if (_isSyncing || _box == null) return;
@@ -219,6 +243,10 @@ class ReportQueueService {
 
     final pending = getPendingReports();
 
+    // Process reports sequentially. Race condition protection:
+    // 1. _isSyncing flag prevents concurrent sync calls
+    // 2. _recoverStuckReports() handles reports stuck from app crash
+    // 3. Skip check below handles reports already being processed
     for (final report in pending) {
       if (report.syncStatus == SyncStatus.syncing) continue;
       if (report.retryCount >= _maxRetries) {

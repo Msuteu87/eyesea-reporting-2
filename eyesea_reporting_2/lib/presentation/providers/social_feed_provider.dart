@@ -2,15 +2,15 @@ import 'dart:async';
 import 'dart:developer';
 import 'package:flutter/foundation.dart';
 import '../../core/services/connectivity_service.dart';
-import '../../data/datasources/social_feed_data_source.dart';
 import '../../domain/entities/feed_item.dart';
+import '../../domain/repositories/social_feed_repository.dart';
 
 /// Filter options for the social feed
 enum FeedFilter { world, country, city }
 
 /// Provider for managing social feed state
 class SocialFeedProvider extends ChangeNotifier {
-  final SocialFeedDataSource _dataSource;
+  final SocialFeedRepository _repository;
   final ConnectivityService _connectivityService;
 
   List<FeedItem> _items = [];
@@ -26,7 +26,7 @@ class SocialFeedProvider extends ChangeNotifier {
   static const int _pageSize = 20;
   int _currentOffset = 0;
 
-  SocialFeedProvider(this._dataSource, this._connectivityService) {
+  SocialFeedProvider(this._repository, this._connectivityService) {
     _connectivitySubscription =
         _connectivityService.onConnectivityChanged.listen((isOnline) {
       if (isOnline && _items.isEmpty) {
@@ -111,7 +111,7 @@ class SocialFeedProvider extends ChangeNotifier {
 
       log('Loading feed: filter=$_currentFilter, country=$country, city=$city, offset=$_currentOffset');
 
-      final data = await _dataSource.fetchFeed(
+      final data = await _repository.fetchFeed(
         userId: _currentUserId,
         country: country,
         city: city,
@@ -176,7 +176,7 @@ class SocialFeedProvider extends ChangeNotifier {
 
     try {
       final actuallyThanked =
-          await _dataSource.toggleThank(reportId, _currentUserId!);
+          await _repository.toggleThank(reportId, _currentUserId!);
 
       // Verify server state matches optimistic update
       if (actuallyThanked != newThanked) {

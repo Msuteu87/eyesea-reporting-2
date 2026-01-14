@@ -3,6 +3,8 @@ import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:provider/provider.dart';
 import '../../core/theme/app_colors.dart';
+import '../../domain/entities/user.dart';
+import '../providers/auth_provider.dart';
 import '../providers/events_provider.dart';
 import 'widgets/event_card.dart';
 import 'widgets/event_detail_modal.dart';
@@ -47,6 +49,9 @@ class _EventsScreenState extends State<EventsScreen>
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final user = context.watch<AuthProvider>().currentUser;
+    final canCreateEvents = user?.role == UserRole.ambassador ||
+        user?.role == UserRole.eyeseaRep;
 
     return Scaffold(
       backgroundColor: isDark ? AppColors.inkBlack : AppColors.culturedWhite,
@@ -82,15 +87,16 @@ class _EventsScreenState extends State<EventsScreen>
                       ],
                     ),
                   ),
-                  // Create event button
-                  IconButton.filled(
-                    onPressed: () => context.push('/create-event'),
-                    icon: const Icon(LucideIcons.plus, size: 20),
-                    style: IconButton.styleFrom(
-                      backgroundColor: AppColors.electricNavy,
-                      foregroundColor: Colors.white,
+                  // Create event button (only for ambassadors and eyesea reps)
+                  if (canCreateEvents)
+                    IconButton.filled(
+                      onPressed: () => context.push('/create-event'),
+                      icon: const Icon(LucideIcons.plus, size: 20),
+                      style: IconButton.styleFrom(
+                        backgroundColor: AppColors.electricNavy,
+                        foregroundColor: Colors.white,
+                      ),
                     ),
-                  ),
                 ],
               ),
             ),

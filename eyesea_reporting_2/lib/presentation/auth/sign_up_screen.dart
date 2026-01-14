@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:wave/config.dart';
 import 'package:wave/wave.dart';
 import 'package:go_router/go_router.dart';
+import '../../core/errors/exceptions.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/validators.dart';
 import '../providers/auth_provider.dart';
@@ -55,11 +56,21 @@ class _SignUpScreenState extends State<SignUpScreen> {
         if (mounted) {
           context.go('/onboarding');
         }
-      } catch (e) {
+      } on AuthException catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Sign Up failed: ${e.toString()}'),
+              content: Text(e.message),
+              backgroundColor: AppColors.error,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      } catch (_) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Sign up failed. Please try again.'),
               backgroundColor: AppColors.error,
               behavior: SnackBarBehavior.floating,
             ),

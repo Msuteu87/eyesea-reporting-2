@@ -16,7 +16,7 @@ class ReportRepositoryImpl implements ReportRepository {
       return data.map((json) => ReportEntity.fromJson(json)).toList();
     } catch (e) {
       AppLogger.error('Error fetching reports: $e');
-      return [];
+      rethrow; // Let callers handle the error and distinguish from empty list
     }
   }
 
@@ -48,5 +48,65 @@ class ReportRepositoryImpl implements ReportRepository {
 
     // 3. Create Image Record
     await _dataSource.createReportImageRecord(reportId, publicUrl, true);
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> fetchReportsInBounds({
+    required double minLat,
+    required double maxLat,
+    required double minLng,
+    required double maxLng,
+    int limit = 500,
+    DateTime? updatedSince,
+    List<String>? statuses,
+  }) {
+    return _dataSource.fetchReportsInBounds(
+      minLat: minLat,
+      maxLat: maxLat,
+      minLng: minLng,
+      maxLng: maxLng,
+      limit: limit,
+      updatedSince: updatedSince,
+      statuses: statuses,
+    );
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> fetchClusteredReports({
+    required double minLat,
+    required double maxLat,
+    required double minLng,
+    required double maxLng,
+    required int zoomLevel,
+    int limit = 500,
+  }) {
+    return _dataSource.fetchClusteredReports(
+      minLat: minLat,
+      maxLat: maxLat,
+      minLng: minLng,
+      maxLng: maxLng,
+      zoomLevel: zoomLevel,
+      limit: limit,
+    );
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> fetchUserReports({
+    required String userId,
+    String? status,
+    int limit = 20,
+    int offset = 0,
+  }) {
+    return _dataSource.fetchUserReports(
+      userId: userId,
+      status: status,
+      limit: limit,
+      offset: offset,
+    );
+  }
+
+  @override
+  Future<void> markAsRecovered(String reportId) {
+    return _dataSource.markAsRecovered(reportId);
   }
 }

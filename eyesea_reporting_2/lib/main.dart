@@ -28,7 +28,15 @@ import 'data/datasources/event_data_source.dart';
 import 'data/repositories/event_repository_impl.dart';
 import 'domain/repositories/event_repository.dart';
 import 'data/datasources/badge_data_source.dart';
+import 'data/datasources/leaderboard_data_source.dart';
+import 'data/repositories/badge_repository_impl.dart';
+import 'data/repositories/report_repository_impl.dart';
+import 'data/repositories/social_feed_repository_impl.dart';
+import 'domain/repositories/badge_repository.dart';
+import 'domain/repositories/report_repository.dart';
+import 'domain/repositories/social_feed_repository.dart';
 import 'presentation/providers/profile_provider.dart';
+import 'presentation/providers/leaderboard_provider.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -82,6 +90,7 @@ Future<void> main() async {
   await connectivityService.initialize();
 
   final reportDataSource = ReportDataSource(supabaseClient);
+  final reportRepository = ReportRepositoryImpl(reportDataSource);
   final reportQueueService =
       ReportQueueService(reportDataSource, connectivityService);
   await reportQueueService.initialize();
@@ -93,9 +102,15 @@ Future<void> main() async {
 
   final aiAnalysisService = AIAnalysisService();
 
-  // Initialize badge data source and profile provider for gamification
+  // Initialize badge repository and profile provider for gamification
   final badgeDataSource = BadgeDataSource(supabaseClient);
-  final profileProvider = ProfileProvider(badgeDataSource, reportDataSource);
+  final badgeRepository = BadgeRepositoryImpl(badgeDataSource);
+  final profileProvider = ProfileProvider(badgeRepository, reportRepository);
+
+  // Initialize leaderboard data source and provider
+  final leaderboardDataSource = LeaderboardDataSource(supabaseClient);
+  final leaderboardProvider =
+      LeaderboardProvider(leaderboardDataSource, badgeDataSource);
 
   // Initialize notification service for realtime in-app notifications
   final notificationService = NotificationService(supabaseClient);
@@ -103,16 +118,17 @@ Future<void> main() async {
 
   // Create reports map provider for displaying markers on the map
   final reportsMapProvider = ReportsMapProvider(
-    reportDataSource,
+    reportRepository,
     reportQueueService,
     connectivityService,
     reportCacheService,
   );
 
-  // Create social feed data source and provider
+  // Create social feed repository and provider
   final socialFeedDataSource = SocialFeedDataSource(supabaseClient);
+  final socialFeedRepository = SocialFeedRepositoryImpl(socialFeedDataSource);
   final socialFeedProvider = SocialFeedProvider(
-    socialFeedDataSource,
+    socialFeedRepository,
     connectivityService,
   );
 
@@ -127,6 +143,9 @@ Future<void> main() async {
         ChangeNotifierProvider.value(value: authProvider),
         Provider<OrganizationRepository>.value(value: orgRepository),
         Provider<EventRepository>.value(value: eventRepository),
+        Provider<ReportRepository>.value(value: reportRepository),
+        Provider<BadgeRepository>.value(value: badgeRepository),
+        Provider<SocialFeedRepository>.value(value: socialFeedRepository),
         Provider<ConnectivityService>.value(value: connectivityService),
         Provider<ReportQueueService>.value(value: reportQueueService),
         Provider<AIAnalysisService>(
@@ -148,6 +167,9 @@ Future<void> main() async {
         ),
         ChangeNotifierProvider<EventsProvider>.value(
           value: eventsProvider,
+        ),
+        ChangeNotifierProvider<LeaderboardProvider>.value(
+          value: leaderboardProvider,
         ),
       ],
       child: EyeseaApp(router: appRouter.router),

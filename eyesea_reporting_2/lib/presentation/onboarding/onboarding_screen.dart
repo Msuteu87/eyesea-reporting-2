@@ -1,3 +1,6 @@
+// TODO: [MAINTAINABILITY] This file is 693 lines - consider splitting.
+// Extract each onboarding step into separate widgets:
+// - WelcomeStep, PermissionsStep, ProfileStep, etc.
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart'; // For kIsWeb
 import 'package:flutter_animate/flutter_animate.dart';

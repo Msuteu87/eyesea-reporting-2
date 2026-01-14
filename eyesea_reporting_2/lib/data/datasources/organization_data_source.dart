@@ -8,13 +8,30 @@ class OrganizationDataSource {
 
   OrganizationDataSource(this._supabaseClient);
 
+  /// Fetches all verified organizations (for Volunteers - optional selection).
+  Future<List<OrganizationEntity>> fetchAllOrganizations() async {
+    try {
+      final data = await _supabaseClient
+          .from('organizations')
+          .select()
+          .eq('verified', true)
+          .order('name', ascending: true);
+
+      return (data as List).map((json) => _mapOrganization(json)).toList();
+    } catch (e) {
+      AppLogger.error('Error fetching all organizations', e);
+      throw Exception('Failed to fetch organizations');
+    }
+  }
+
+  /// Fetches verified shipping companies (for Seafarers - required selection).
   Future<List<OrganizationEntity>> fetchShippingCompanies() async {
     try {
       final data = await _supabaseClient
           .from('organizations')
           .select()
           .eq('org_type', 'shipping_company')
-          .eq('verified', true); // Only verified for now
+          .eq('verified', true);
 
       return (data as List).map((json) => _mapOrganization(json)).toList();
     } catch (e) {

@@ -9,9 +9,6 @@ import '../../core/theme/app_colors.dart';
 import '../../domain/entities/report.dart';
 import '../../domain/repositories/report_repository.dart';
 import '../providers/auth_provider.dart';
-import '../../data/datasources/report_data_source.dart';
-import '../../data/repositories/report_repository_impl.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 class ReportScreen extends StatefulWidget {
   const ReportScreen({super.key});
@@ -28,14 +25,9 @@ class _ReportScreenState extends State<ReportScreen> {
   bool _isGlobalSubmitting = false;
   Point? _currentLocation;
 
-  // Dependency Injection (simplified for now)
-  late final ReportRepository _reportRepository;
-
   @override
   void initState() {
     super.initState();
-    _reportRepository =
-        ReportRepositoryImpl(ReportDataSource(Supabase.instance.client));
     _detectLocation();
   }
 
@@ -92,7 +84,7 @@ class _ReportScreenState extends State<ReportScreen> {
         reportedAt: DateTime.now(),
       );
 
-      await _reportRepository.createReport(
+      await context.read<ReportRepository>().createReport(
           report: report, imageFile: _imageFile!);
 
       if (mounted) {

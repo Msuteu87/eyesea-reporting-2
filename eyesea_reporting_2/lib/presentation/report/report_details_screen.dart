@@ -1,3 +1,5 @@
+// TODO: [MAINTAINABILITY] This file is 641 lines - consider splitting.
+// Extract: AIAnalysisCard, LocationPicker, PollutionTypeSelector, SeveritySlider
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';

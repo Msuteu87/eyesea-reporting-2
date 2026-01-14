@@ -9,6 +9,8 @@ import '../leaderboard/leaderboard_screen.dart';
 import '../report/report_screen.dart';
 import '../report/camera_capture_screen.dart';
 import '../report/report_details_screen.dart';
+import '../report/report_view_screen.dart';
+import '../../domain/entities/report.dart';
 import '../social_feed/social_feed_screen.dart';
 import '../providers/auth_provider.dart';
 import '../navigation/main_shell.dart';
@@ -223,6 +225,16 @@ class AppRouter {
             path: '/create-event',
             name: 'create-event',
             builder: (context, state) => const CreateEventScreen(),
+          ),
+
+          // Report View Route (viewing existing reports)
+          GoRoute(
+            path: '/report-view',
+            name: 'report-view',
+            builder: (context, state) {
+              final report = state.extra as ReportEntity;
+              return ReportViewScreen(report: report);
+            },
           ),
         ],
         errorBuilder: (context, state) => Scaffold(

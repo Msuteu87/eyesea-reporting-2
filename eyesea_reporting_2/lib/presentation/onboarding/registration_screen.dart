@@ -25,13 +25,15 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   final _nameController = TextEditingController();
   String? _selectedCountry;
 
-  // Seafarer specific
+  // Role and organization state
   UserRole _selectedRole = UserRole.volunteer;
   OrganizationEntity? _selectedOrg;
   VesselEntity? _selectedVessel;
 
-  List<OrganizationEntity> _shippingCompanies = [];
+  List<OrganizationEntity> _allOrganizations = []; // For Volunteers (optional)
+  List<OrganizationEntity> _shippingCompanies = []; // For Seafarers (required)
   List<VesselEntity> _vessels = [];
+  bool _isLoadingOrgs = false;
   bool _isLoadingVessels = false;
 
   bool _isDataConsentGiven = false;
@@ -51,16 +53,26 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   }
 
   Future<void> _fetchOrganizations() async {
+    setState(() => _isLoadingOrgs = true);
     try {
       final repo = context.read<OrganizationRepository>();
-      final orgs = await repo.fetchShippingCompanies();
+      // Fetch both lists in parallel for efficiency
+      final results = await Future.wait([
+        repo.fetchAllOrganizations(), // For Volunteers
+        repo.fetchShippingCompanies(), // For Seafarers
+      ]);
       if (mounted) {
-        setState(() => _shippingCompanies = orgs);
+        setState(() {
+          _allOrganizations = results[0];
+          _shippingCompanies = results[1];
+        });
       }
     } catch (e) {
       AppLogger.error('Error fetching organizations', e);
     } finally {
-      if (mounted) {}
+      if (mounted) {
+        setState(() => _isLoadingOrgs = false);
+      }
     }
   }
 
@@ -239,22 +251,44 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                   onSelectionChanged: (newSelection) {
                     setState(() {
                       _selectedRole = newSelection.first;
+                      // Reset selections when role changes
+                      _selectedOrg = null;
+                      _selectedVessel = null;
+                      _vessels = [];
                     });
                   },
                 ),
               ).animate().fadeIn(delay: 500.ms),
 
-              // Seafarer Fields
-              if (_selectedRole == UserRole.seafarer) ...[
-                const SizedBox(height: 24),
+              // Organization Dropdown (shown for both roles)
+              const SizedBox(height: 24),
 
-                // Org Dropdown
+              if (_isLoadingOrgs)
+                const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(16),
+                    child: CircularProgressIndicator(),
+                  ),
+                ).animate().fadeIn(delay: 500.ms)
+              else
                 DropdownButtonFormField<OrganizationEntity>(
-                  key: ValueKey(_selectedOrg?.id ?? 'org_selector'),
-                  decoration: _inputDecoration('Organization', Icons.business),
+                  key: ValueKey(
+                      '${_selectedOrg?.id ?? 'org'}_${_selectedRole.name}'),
+                  decoration: _inputDecoration(
+                    _selectedRole == UserRole.seafarer
+                        ? 'Organization *'
+                        : 'Organization (Optional)',
+                    Icons.business,
+                  ),
                   initialValue: _selectedOrg,
                   isExpanded: true,
-                  items: _shippingCompanies.map((org) {
+                  hint: Text(_selectedRole == UserRole.seafarer
+                      ? 'Select your shipping company'
+                      : 'Select organization (optional)'),
+                  items: (_selectedRole == UserRole.seafarer
+                          ? _shippingCompanies
+                          : _allOrganizations)
+                      .map((org) {
                     return DropdownMenuItem(
                       value: org,
                       child: Text(org.name, overflow: TextOverflow.ellipsis),
@@ -263,35 +297,35 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                   onChanged: (org) {
                     setState(() {
                       _selectedOrg = org;
-                      _selectedVessel = null; // Reset vessel
+                      _selectedVessel = null;
+                      _vessels = [];
                     });
-                    if (org != null) {
+                    if (org != null && _selectedRole == UserRole.seafarer) {
                       _fetchVessels(org.id);
                     }
                   },
                   validator: (val) =>
                       val == null && _selectedRole == UserRole.seafarer
-                          ? 'Required'
+                          ? 'Required for Seafarers'
                           : null,
-                ).animate().fadeIn(),
+                ).animate().fadeIn(delay: 500.ms),
 
+              // Vessel Dropdown (Seafarer only - required)
+              if (_selectedRole == UserRole.seafarer) ...[
                 const SizedBox(height: 16),
 
-                // Vessel Dropdown
                 DropdownButtonFormField<VesselEntity>(
                   key: ValueKey(_selectedVessel?.id ??
-                      'vessel_${_selectedOrg?.id}'), // Force rebuild on org change to reset
-                  decoration: _inputDecoration('Vessel', Icons.anchor),
+                      'vessel_${_selectedOrg?.id}'),
+                  decoration: _inputDecoration('Vessel *', Icons.anchor),
                   initialValue: _selectedVessel,
                   isExpanded: true,
+                  hint: const Text('Select your vessel'),
                   items: _vessels.map((vessel) {
                     return DropdownMenuItem(
                       value: vessel,
                       child: Text(
-                          vessel.name +
-                              (vessel.imoNumber != null
-                                  ? ' (${vessel.imoNumber})'
-                                  : ''),
+                          '${vessel.name}${vessel.imoNumber != null ? ' (${vessel.imoNumber})' : ''}',
                           overflow: TextOverflow.ellipsis),
                     );
                   }).toList(),
@@ -302,9 +336,8 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                         },
                   validator: (val) =>
                       val == null && _selectedRole == UserRole.seafarer
-                          ? 'Required'
+                          ? 'Required for Seafarers'
                           : null,
-                  // Disable if no org selected or loading
                   disabledHint: _isLoadingVessels
                       ? const Text('Loading vessels...')
                       : (_selectedOrg == null

@@ -16,6 +16,8 @@ class SecureStorageService {
 
   // Keys for secure storage
   static const _keyHiveEncryptionKey = 'hive_encryption_key';
+  static const _keyOnboardingPrefix = 'onboarding_complete_';
+  static const _keyTermsAccepted = 'terms_accepted';
 
   /// Generate and store a 32-byte encryption key for Hive, or retrieve existing one.
   /// Returns a List<int> suitable for HiveAesCipher.
@@ -46,5 +48,42 @@ class SecureStorageService {
   /// Clear all secure storage (for complete logout/reset)
   static Future<void> clearAll() async {
     await _storage.deleteAll();
+  }
+
+  // ===== Onboarding Status =====
+
+  /// Check if onboarding is complete for a specific user
+  static Future<bool> isOnboardingComplete(String userId) async {
+    final value = await _storage.read(key: '$_keyOnboardingPrefix$userId');
+    return value == 'true';
+  }
+
+  /// Mark onboarding as complete for a specific user
+  static Future<void> setOnboardingComplete(String userId, bool complete) async {
+    await _storage.write(
+      key: '$_keyOnboardingPrefix$userId',
+      value: complete.toString(),
+    );
+  }
+
+  // ===== Terms Acceptance =====
+
+  /// Check if terms have been accepted
+  static Future<bool> hasAcceptedTerms() async {
+    final value = await _storage.read(key: _keyTermsAccepted);
+    return value == 'true';
+  }
+
+  /// Mark terms as accepted
+  static Future<void> setTermsAccepted(bool accepted) async {
+    await _storage.write(
+      key: _keyTermsAccepted,
+      value: accepted.toString(),
+    );
+  }
+
+  /// Clear user-specific data (for logout while preserving global settings)
+  static Future<void> clearUserData(String userId) async {
+    await _storage.delete(key: '$_keyOnboardingPrefix$userId');
   }
 }

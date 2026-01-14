@@ -1,3 +1,9 @@
+// TODO: [MAINTAINABILITY] This file is 890 lines - consider splitting.
+// Candidates for extraction:
+// - SettingsTab → settings_tab.dart (already exists but could be separate screen)
+// - MyReportsTab → my_reports_tab.dart
+// - LegalTab → legal_tab.dart
+// - ProfileHeader → profile_header.dart
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -12,6 +18,7 @@ import '../providers/profile_provider.dart';
 import '../../domain/entities/user.dart';
 import '../../domain/entities/vessel.dart';
 import '../../domain/entities/badge.dart';
+import '../../domain/entities/organization.dart';
 import '../../domain/repositories/organization_repository.dart';
 import 'widgets/my_reports_tab.dart';
 import 'widgets/settings_tab.dart';
@@ -32,6 +39,15 @@ class _ProfileScreenState extends State<ProfileScreen>
   bool _isEditing = false;
   late TextEditingController _nameController;
   late TextEditingController _countryController;
+
+  // Role/Org/Vessel editing state
+  UserRole? _editingRole;
+  OrganizationEntity? _editingOrg;
+  VesselEntity? _editingVessel;
+  List<OrganizationEntity> _organizations = [];
+  List<VesselEntity> _editingVessels = [];
+  bool _isLoadingOrgs = false;
+  bool _isLoadingEditVessels = false;
 
   // Image Upload
   final ImagePicker _picker = ImagePicker();
@@ -110,10 +126,39 @@ class _ProfileScreenState extends State<ProfileScreen>
   }
 
   Future<void> _saveProfile() async {
+    final user = context.read<AuthProvider>().currentUser;
+    if (user == null) return;
+
+    // Validation for Seafarer role
+    if (_editingRole == UserRole.seafarer) {
+      if (_editingOrg == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please select an organization'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+        return;
+      }
+      if (_editingVessel == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please select a vessel'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+        return;
+      }
+    }
+
     try {
       await context.read<AuthProvider>().updateProfile(
             displayName: _nameController.text.trim(),
             country: _countryController.text.trim(),
+            role: _editingRole,
+            orgId: _editingOrg?.id,
+            currentVesselId:
+                _editingRole == UserRole.seafarer ? _editingVessel?.id : null,
           );
       setState(() => _isEditing = false);
       if (mounted) {
@@ -129,6 +174,134 @@ class _ProfileScreenState extends State<ProfileScreen>
             content: Text('Failed: $e'), backgroundColor: AppColors.error));
       }
     }
+  }
+
+  void _startEditing() {
+    final user = context.read<AuthProvider>().currentUser;
+    setState(() {
+      _isEditing = true;
+      _editingRole = user?.role;
+      _editingOrg = null;
+      _editingVessel = null;
+      _organizations = [];
+      _editingVessels = [];
+    });
+    _fetchOrganizationsForEdit();
+  }
+
+  Future<void> _fetchOrganizationsForEdit() async {
+    setState(() => _isLoadingOrgs = true);
+    try {
+      final repo = context.read<OrganizationRepository>();
+      final orgs = _editingRole == UserRole.seafarer
+          ? await repo.fetchShippingCompanies()
+          : await repo.fetchAllOrganizations();
+      if (mounted) {
+        setState(() => _organizations = orgs);
+      }
+    } catch (e) {
+      AppLogger.error('Error fetching organizations for edit', e);
+    } finally {
+      if (mounted) setState(() => _isLoadingOrgs = false);
+    }
+  }
+
+  Future<void> _fetchVesselsForEdit(String orgId) async {
+    setState(() {
+      _isLoadingEditVessels = true;
+      _editingVessels = [];
+      _editingVessel = null;
+    });
+    try {
+      final repo = context.read<OrganizationRepository>();
+      final vessels = await repo.fetchVessels(orgId);
+      if (mounted) {
+        setState(() => _editingVessels = vessels);
+      }
+    } catch (e) {
+      AppLogger.error('Error fetching vessels for edit', e);
+    } finally {
+      if (mounted) setState(() => _isLoadingEditVessels = false);
+    }
+  }
+
+  Future<void> _handleRoleChange(UserRole newRole) async {
+    final user = context.read<AuthProvider>().currentUser;
+    if (user == null) return;
+
+    final currentRole = user.role;
+
+    // Block switching to Ambassador or EyeseaRep
+    if (newRole == UserRole.ambassador || newRole == UserRole.eyeseaRep) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('This role is managed by administrators'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
+    // Seafarer -> Volunteer: Ask about keeping organization
+    if (currentRole == UserRole.seafarer && newRole == UserRole.volunteer) {
+      final keepOrg = await _showKeepOrgDialog();
+
+      setState(() {
+        _editingRole = newRole;
+        _editingVessel = null; // Always clear vessel for volunteers
+        if (!keepOrg) {
+          _editingOrg = null;
+        }
+      });
+
+      // Refetch orgs for volunteer (all orgs)
+      await _fetchOrganizationsForEdit();
+      return;
+    }
+
+    // Volunteer -> Seafarer: Will require org + vessel selection
+    if ((currentRole == UserRole.volunteer || _editingRole == UserRole.volunteer) &&
+        newRole == UserRole.seafarer) {
+      setState(() {
+        _editingRole = newRole;
+        _editingOrg = null; // Must select shipping company
+        _editingVessel = null;
+        _editingVessels = [];
+      });
+
+      // Fetch shipping companies
+      await _fetchOrganizationsForEdit();
+      return;
+    }
+
+    // Same role - just update state
+    setState(() {
+      _editingRole = newRole;
+    });
+  }
+
+  Future<bool> _showKeepOrgDialog() async {
+    return await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Keep Organization?'),
+            content: const Text(
+              'You are changing from Seafarer to Volunteer. '
+              'Do you want to keep your current organization affiliation?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Leave Organization'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Keep Organization'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
   }
 
   @override
@@ -222,7 +395,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                   if (_isEditing) {
                     _saveProfile();
                   } else {
-                    setState(() => _isEditing = true);
+                    _startEditing();
                   }
                 },
                 style: IconButton.styleFrom(
@@ -273,22 +446,31 @@ class _ProfileScreenState extends State<ProfileScreen>
                   .bodySmall
                   ?.copyWith(color: Colors.grey)),
 
+          // Role/Org/Vessel editing (only for Volunteer/Seafarer)
+          if (_isEditing &&
+              (user.role == UserRole.volunteer ||
+                  user.role == UserRole.seafarer)) ...[
+            const SizedBox(height: 16),
+            _buildRoleOrgVesselEditor(context, user, primaryColor),
+          ],
+
           const SizedBox(height: 12),
 
-          // Pills (Level & Org)
-          Wrap(
-            spacing: 8,
-            alignment: WrapAlignment.center,
-            children: [
-              _buildPill(context, level, LucideIcons.award, primaryColor),
-              if (user.orgName != null)
-                _buildPill(context, user.orgName!, LucideIcons.building2,
-                    Colors.indigoAccent),
-            ],
-          ).animate().fadeIn(delay: 200.ms).slideY(begin: 0.5),
+          // Pills (Level & Org) - hide when editing
+          if (!_isEditing)
+            Wrap(
+              spacing: 8,
+              alignment: WrapAlignment.center,
+              children: [
+                _buildPill(context, level, LucideIcons.award, primaryColor),
+                if (user.orgName != null)
+                  _buildPill(context, user.orgName!, LucideIcons.building2,
+                      Colors.indigoAccent),
+              ],
+            ).animate().fadeIn(delay: 200.ms).slideY(begin: 0.5),
 
-          // Seafarer Information
-          if (user.role == UserRole.seafarer) ...[
+          // Seafarer Information - hide when editing
+          if (!_isEditing && user.role == UserRole.seafarer) ...[
             const SizedBox(height: 16),
             _buildVesselCard(context, user, primaryColor)
                 .animate()
@@ -297,6 +479,134 @@ class _ProfileScreenState extends State<ProfileScreen>
           ],
         ],
       ),
+    );
+  }
+
+  Widget _buildRoleOrgVesselEditor(
+      BuildContext context, UserEntity user, Color primaryColor) {
+    final effectiveRole = _editingRole ?? user.role;
+
+    return Column(
+      children: [
+        // Role Selection (Volunteer/Seafarer only)
+        SizedBox(
+          width: double.infinity,
+          child: SegmentedButton<UserRole>(
+            segments: const [
+              ButtonSegment(
+                value: UserRole.volunteer,
+                label: Text('Volunteer'),
+                icon: Icon(Icons.favorite, size: 18),
+              ),
+              ButtonSegment(
+                value: UserRole.seafarer,
+                label: Text('Seafarer'),
+                icon: Icon(Icons.directions_boat, size: 18),
+              ),
+            ],
+            selected: {effectiveRole},
+            onSelectionChanged: (newSelection) {
+              _handleRoleChange(newSelection.first);
+            },
+          ),
+        ),
+
+        const SizedBox(height: 16),
+
+        // Organization Dropdown
+        if (_isLoadingOrgs)
+          const Padding(
+            padding: EdgeInsets.all(8),
+            child: SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          )
+        else
+          SizedBox(
+            width: double.infinity,
+            child: DropdownButtonFormField<OrganizationEntity>(
+              key: ValueKey('org_edit_${_editingOrg?.id}'),
+              decoration: InputDecoration(
+                labelText: effectiveRole == UserRole.seafarer
+                    ? 'Organization *'
+                    : 'Organization (Optional)',
+                border:
+                    OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              ),
+              initialValue: _editingOrg,
+              isExpanded: true,
+              hint: Text(effectiveRole == UserRole.seafarer
+                  ? 'Select shipping company'
+                  : 'Select organization'),
+              items: _organizations.map((org) {
+                return DropdownMenuItem(
+                  value: org,
+                  child: Text(org.name, overflow: TextOverflow.ellipsis),
+                );
+              }).toList(),
+              onChanged: (org) {
+                setState(() {
+                  _editingOrg = org;
+                  _editingVessel = null;
+                  _editingVessels = [];
+                });
+                if (org != null && effectiveRole == UserRole.seafarer) {
+                  _fetchVesselsForEdit(org.id);
+                }
+              },
+            ),
+          ),
+
+        // Vessel Dropdown (Seafarer only)
+        if (effectiveRole == UserRole.seafarer) ...[
+          const SizedBox(height: 12),
+          if (_isLoadingEditVessels)
+            const Padding(
+              padding: EdgeInsets.all(8),
+              child: SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            )
+          else
+            SizedBox(
+              width: double.infinity,
+              child: DropdownButtonFormField<VesselEntity>(
+                key: ValueKey('vessel_edit_${_editingVessel?.id}'),
+                decoration: InputDecoration(
+                  labelText: 'Vessel *',
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                ),
+                initialValue: _editingVessel,
+                isExpanded: true,
+                hint: const Text('Select vessel'),
+                items: _editingVessels.map((vessel) {
+                  return DropdownMenuItem(
+                    value: vessel,
+                    child: Text(
+                      '${vessel.name}${vessel.imoNumber != null ? ' (${vessel.imoNumber})' : ''}',
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  );
+                }).toList(),
+                onChanged: _editingOrg == null
+                    ? null
+                    : (vessel) => setState(() => _editingVessel = vessel),
+                disabledHint: _editingOrg == null
+                    ? const Text('Select organization first')
+                    : null,
+              ),
+            ),
+        ],
+      ],
     );
   }
 

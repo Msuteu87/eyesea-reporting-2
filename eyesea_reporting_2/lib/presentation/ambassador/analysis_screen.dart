@@ -16,7 +16,7 @@ class AnalysisScreen extends StatelessWidget {
     final primaryColor = Theme.of(context).colorScheme.primary;
 
     // Security Check (Redundant if guarded by route, but good practice)
-    if (user?.role != UserRole.ambassador) {
+    if (user?.role != UserRole.ambassador && user?.role != UserRole.eyeseaRep) {
       return Scaffold(
         body: Center(
           child: Column(
@@ -27,7 +27,7 @@ class AnalysisScreen extends StatelessWidget {
               const Text('Access Restricted',
                   style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
-              const Text('This area is for Ambassadors only.'),
+              const Text('This area is for Ambassadors and Eyesea Representatives only.'),
               const SizedBox(height: 24),
               FilledButton(
                 onPressed: () => context.go('/home'),

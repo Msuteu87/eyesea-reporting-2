@@ -1,3 +1,5 @@
+// TODO: [MAINTAINABILITY] This file is 577 lines - consider splitting.
+// Extract: EventForm, LocationPicker, DateTimePicker widgets
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';

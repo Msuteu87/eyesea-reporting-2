@@ -1,3 +1,5 @@
+// TODO: [MAINTAINABILITY] This file is 594 lines - provider does too much.
+// Split into: ReportsDataProvider, ReportsFilterProvider, ReportsMarkerProvider
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
@@ -5,9 +7,9 @@ import '../../core/services/connectivity_service.dart';
 import '../../core/services/report_cache_service.dart';
 import '../../core/services/report_queue_service.dart';
 import '../../core/utils/logger.dart';
-import '../../data/datasources/report_data_source.dart';
 import '../../domain/entities/pending_report.dart';
 import '../../domain/entities/report.dart';
+import '../../domain/repositories/report_repository.dart';
 
 /// Data class for map markers combining local and remote reports
 class MapMarkerData {
@@ -166,7 +168,7 @@ class MapMarkerData {
 /// Combines local pending reports (offline) with remote synced reports (online).
 /// Supports server-side clustering, local caching, and delta sync.
 class ReportsMapProvider extends ChangeNotifier {
-  final ReportDataSource _dataSource;
+  final ReportRepository _repository;
   final ReportQueueService _queueService;
   final ConnectivityService _connectivityService;
   final ReportCacheService _cacheService;
@@ -213,7 +215,7 @@ class ReportsMapProvider extends ChangeNotifier {
   int _lastMarkersLength = 0;
 
   ReportsMapProvider(
-    this._dataSource,
+    this._repository,
     this._queueService,
     this._connectivityService,
     this._cacheService,
@@ -461,7 +463,7 @@ class ReportsMapProvider extends ChangeNotifier {
             }
           }
 
-          final remoteData = await _dataSource.fetchReportsInBounds(
+          final remoteData = await _repository.fetchReportsInBounds(
             minLat: minLat,
             maxLat: maxLat,
             minLng: minLng,
@@ -562,7 +564,7 @@ class ReportsMapProvider extends ChangeNotifier {
   /// Mark a report as recovered (resolved)
   Future<void> markAsRecovered(String reportId) async {
     try {
-      await _dataSource.markAsRecovered(reportId);
+      await _repository.markAsRecovered(reportId);
       // Update the local marker status immediately
       final index = _markers.indexWhere((m) => m.id == reportId);
       if (index != -1) {

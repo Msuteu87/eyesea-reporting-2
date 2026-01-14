@@ -9,6 +9,11 @@ class OrganizationRepositoryImpl implements OrganizationRepository {
   OrganizationRepositoryImpl(this._dataSource);
 
   @override
+  Future<List<OrganizationEntity>> fetchAllOrganizations() async {
+    return await _dataSource.fetchAllOrganizations();
+  }
+
+  @override
   Future<List<OrganizationEntity>> fetchShippingCompanies() async {
     return await _dataSource.fetchShippingCompanies();
   }

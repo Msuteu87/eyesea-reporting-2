@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../core/services/secure_storage_service.dart';
 import '../../domain/entities/user.dart';
 import '../../domain/repositories/auth_repository.dart';
 import '../../core/utils/logger.dart';
@@ -36,6 +37,8 @@ class AuthProvider extends ChangeNotifier {
       if (fullUser != null) {
         _currentUser = fullUser;
       }
+      // One-time migration from SharedPreferences to SecureStorage
+      await _migrateFromSharedPreferences(_currentUser!.id);
     }
     notifyListeners();
 
@@ -50,14 +53,39 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Migrates onboarding status from SharedPreferences to SecureStorage (one-time)
+  Future<void> _migrateFromSharedPreferences(String userId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final oldKey = 'onboarding_completed_$userId';
+      const oldTermsKey = 'terms_accepted';
+
+      // Migrate onboarding status
+      if (prefs.containsKey(oldKey)) {
+        final value = prefs.getBool(oldKey) ?? false;
+        await SecureStorageService.setOnboardingComplete(userId, value);
+        await prefs.remove(oldKey);
+        AppLogger.info('Migrated onboarding status to secure storage');
+      }
+
+      // Migrate terms acceptance
+      if (prefs.containsKey(oldTermsKey)) {
+        final value = prefs.getBool(oldTermsKey) ?? false;
+        await SecureStorageService.setTermsAccepted(value);
+        await prefs.remove(oldTermsKey);
+        AppLogger.info('Migrated terms acceptance to secure storage');
+      }
+    } catch (e) {
+      AppLogger.warning('Migration from SharedPreferences failed: $e');
+      // Non-fatal - user can re-complete onboarding if needed
+    }
+  }
+
   Future<void> checkOnboardingStatus() async {
     final user = _currentUser;
     if (user != null) {
-      final prefs = await SharedPreferences.getInstance();
-      // Use user-specific key
-      final key = 'onboarding_completed_${user.id}';
-
-      final localComplete = prefs.getBool(key) ?? false;
+      final localComplete =
+          await SecureStorageService.isOnboardingComplete(user.id);
 
       final hasName = user.displayName != null && user.displayName!.isNotEmpty;
 
@@ -75,23 +103,18 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> acceptTerms() async {
-    // Terms are usually global or per-install, but let's keep it simple
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('terms_accepted', true);
+    await SecureStorageService.setTermsAccepted(true);
     notifyListeners();
   }
 
   Future<bool> hasAcceptedTerms() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool('terms_accepted') ?? false;
+    return SecureStorageService.hasAcceptedTerms();
   }
 
   Future<void> setOnboardingComplete() async {
     final user = _currentUser;
     if (user != null) {
-      final prefs = await SharedPreferences.getInstance();
-      final key = 'onboarding_completed_${user.id}';
-      await prefs.setBool(key, true);
+      await SecureStorageService.setOnboardingComplete(user.id, true);
       _isOnboardingComplete = true;
       notifyListeners();
     }

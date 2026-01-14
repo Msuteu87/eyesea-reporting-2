@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../core/errors/exceptions.dart';
+import '../../core/utils/error_mapper.dart';
 import '../../core/utils/logger.dart';
 
 
@@ -14,24 +14,24 @@ class AuthDataSource {
   Future<void> signInWithEmailAndPassword(String email, String password) async {
     try {
       await _supabase.auth.signInWithPassword(email: email, password: password);
-    } catch (e) {
-      throw ServerException(message: e.toString());
+    } catch (e, stackTrace) {
+      throw ErrorMapper.mapAuthError(e, stackTrace);
     }
   }
 
   Future<void> signUpWithEmailAndPassword(String email, String password) async {
     try {
       await _supabase.auth.signUp(email: email, password: password);
-    } catch (e) {
-      throw ServerException(message: e.toString());
+    } catch (e, stackTrace) {
+      throw ErrorMapper.mapAuthError(e, stackTrace);
     }
   }
 
   Future<void> signOut() async {
     try {
       await _supabase.auth.signOut();
-    } catch (e) {
-      throw ServerException(message: e.toString());
+    } catch (e, stackTrace) {
+      throw ErrorMapper.mapAuthError(e, stackTrace);
     }
   }
 
@@ -45,8 +45,8 @@ class AuthDataSource {
         provider,
         redirectTo: kIsWeb ? null : 'io.supabase.eyesea://login-callback',
       );
-    } catch (e) {
-      throw ServerException(message: e.toString());
+    } catch (e, stackTrace) {
+      throw ErrorMapper.mapAuthError(e, stackTrace);
     }
   }
 
@@ -74,8 +74,8 @@ class AuthDataSource {
             )
           ''').eq('id', userId).maybeSingle();
       return response;
-    } catch (e) {
-      throw ServerException(message: e.toString());
+    } catch (e, stackTrace) {
+      throw ErrorMapper.mapServerError(e, stackTrace);
     }
   }
 
@@ -83,8 +83,8 @@ class AuthDataSource {
       String userId, Map<String, dynamic> data) async {
     try {
       await _supabase.from('profiles').update(data).eq('id', userId);
-    } catch (e) {
-      throw ServerException(message: e.toString());
+    } catch (e, stackTrace) {
+      throw ErrorMapper.mapServerError(e, stackTrace);
     }
   }
 
@@ -111,9 +111,8 @@ class AuthDataSource {
 
       AppLogger.info('[Avatar] Upload successful. URL: $cacheBustedUrl');
       return cacheBustedUrl;
-    } catch (e) {
-      AppLogger.error('[Avatar] Upload failed', e);
-      throw ServerException(message: e.toString());
+    } catch (e, stackTrace) {
+      throw ErrorMapper.mapServerError(e, stackTrace);
     }
   }
 

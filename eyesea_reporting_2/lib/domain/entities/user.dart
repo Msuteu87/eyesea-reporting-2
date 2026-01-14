@@ -3,6 +3,7 @@ enum UserRole {
   ambassador,
   admin,
   seafarer,
+  eyeseaRep,
 }
 
 class UserEntity {
@@ -95,6 +96,8 @@ class UserEntity {
         return UserRole.admin;
       case 'seafarer':
         return UserRole.seafarer;
+      case 'eyesea_rep':
+        return UserRole.eyeseaRep;
       default:
         return UserRole.volunteer;
     }

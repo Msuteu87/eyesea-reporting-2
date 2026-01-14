@@ -1,16 +1,16 @@
 import 'package:flutter/foundation.dart';
-import '../../data/datasources/badge_data_source.dart';
-import '../../data/datasources/report_data_source.dart';
 import '../../domain/entities/badge.dart';
 import '../../domain/entities/report.dart';
+import '../../domain/repositories/badge_repository.dart';
+import '../../domain/repositories/report_repository.dart';
 import '../../core/utils/logger.dart';
 
 /// Provider for profile page data including badges, stats, and user reports.
 class ProfileProvider extends ChangeNotifier {
-  final BadgeDataSource _badgeDataSource;
-  final ReportDataSource _reportDataSource;
+  final BadgeRepository _badgeRepository;
+  final ReportRepository _reportRepository;
 
-  ProfileProvider(this._badgeDataSource, this._reportDataSource);
+  ProfileProvider(this._badgeRepository, this._reportRepository);
 
   // Badges state
   List<BadgeEntity> _badges = [];
@@ -63,7 +63,7 @@ class ProfileProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      _badges = await _badgeDataSource.fetchBadgesWithStatus(userId);
+      _badges = await _badgeRepository.fetchBadgesWithStatus(userId);
     } catch (e) {
       AppLogger.error('Failed to load badges', e);
       _badges = [];
@@ -79,7 +79,7 @@ class ProfileProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      _stats = await _badgeDataSource.fetchUserRank(userId, streakDays: streakDays);
+      _stats = await _badgeRepository.fetchUserRank(userId, streakDays: streakDays);
     } catch (e) {
       AppLogger.error('Failed to load stats', e);
       _stats = UserStats.empty;
@@ -108,7 +108,7 @@ class ProfileProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final response = await _reportDataSource.fetchUserReports(
+      final response = await _reportRepository.fetchUserReports(
         userId: userId,
         status: status,
         limit: _reportsLimit,
