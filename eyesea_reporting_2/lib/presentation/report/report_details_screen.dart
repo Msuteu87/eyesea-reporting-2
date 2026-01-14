@@ -25,6 +25,7 @@ import 'widgets/severity_selector.dart';
 import 'widgets/report_summary_card.dart';
 import 'widgets/report_image_header.dart';
 import 'widgets/report_submit_button.dart';
+import '../social_feed/widgets/offline_banner.dart';
 
 /// Report details screen - receives captured/selected image and allows user
 /// to fill in pollution details before submitting.
@@ -67,17 +68,75 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen> {
     super.dispose();
   }
 
+  bool _isLocationLoading = false;
+
   Future<void> _detectLocation() async {
+    if (_isLocationLoading) return;
+
+    setState(() {
+      _isLocationLoading = true;
+    });
+
     try {
-      final permission = await geo.Geolocator.checkPermission();
+      // Check and request permission
+      var permission = await geo.Geolocator.checkPermission();
       if (permission == geo.LocationPermission.denied) {
-        await geo.Geolocator.requestPermission();
+        permission = await geo.Geolocator.requestPermission();
+        if (permission == geo.LocationPermission.denied) {
+          _handleLocationError('Location permission denied');
+          return;
+        }
       }
 
+      if (permission == geo.LocationPermission.deniedForever) {
+        _handleLocationError(
+            'Location permission permanently denied. Please enable in Settings.');
+        return;
+      }
+
+      // Step 1: Try last known location first (instant fallback)
+      final lastKnown = await geo.Geolocator.getLastKnownPosition();
+      if (lastKnown != null && mounted) {
+        AppLogger.info('Using last known location as initial fallback');
+        setState(() {
+          _currentLocation = Point(
+            coordinates: Position(lastKnown.longitude, lastKnown.latitude),
+          );
+        });
+        // Start reverse geocoding in background (will skip if offline)
+        _reverseGeocodeIfOnline(lastKnown.latitude, lastKnown.longitude);
+      }
+
+      // Step 2: Get fresh GPS position with extended timeout
+      // Use medium accuracy for faster acquisition (50-200m)
+      // Timeout at 90 seconds for cold start GPS without A-GPS
       final position = await geo.Geolocator.getCurrentPosition(
-        locationSettings: const geo.LocationSettings(
-          accuracy: geo.LocationAccuracy.high,
+        locationSettings: geo.AndroidSettings(
+          accuracy: geo.LocationAccuracy.medium,
+          timeLimit: const Duration(seconds: 90),
+          forceLocationManager: false,
         ),
+      ).timeout(
+        const Duration(seconds: 90),
+        onTimeout: () async {
+          // If fresh GPS times out but we have last known, use that
+          if (_currentLocation != null) {
+            AppLogger.info('GPS timeout - using last known location');
+            return geo.Position(
+              latitude: _currentLocation!.coordinates.lat.toDouble(),
+              longitude: _currentLocation!.coordinates.lng.toDouble(),
+              timestamp: DateTime.now(),
+              accuracy: 500, // Mark as approximate
+              altitude: 0,
+              altitudeAccuracy: 0,
+              heading: 0,
+              headingAccuracy: 0,
+              speed: 0,
+              speedAccuracy: 0,
+            );
+          }
+          throw Exception('GPS timeout');
+        },
       );
 
       if (mounted) {
@@ -85,14 +144,85 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen> {
           _currentLocation = Point(
             coordinates: Position(position.longitude, position.latitude),
           );
+          _isLocationLoading = false;
         });
 
-        // Reverse geocode to get city/country
-        _reverseGeocode(position.latitude, position.longitude);
+        // Reverse geocode in background (will skip if offline)
+        _reverseGeocodeIfOnline(position.latitude, position.longitude);
       }
     } catch (e) {
       AppLogger.error('Error getting location: $e');
+      _handleLocationError(e.toString());
     }
+  }
+
+  void _handleLocationError(String error) {
+    if (!mounted) return;
+
+    setState(() {
+      _isLocationLoading = false;
+    });
+
+    if (_currentLocation == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Row(
+            children: [
+              Icon(LucideIcons.mapPinOff, color: Colors.white, size: 20),
+              SizedBox(width: 12),
+              Expanded(
+                child: Text('Could not get location. Tap to set manually.'),
+              ),
+            ],
+          ),
+          backgroundColor: Colors.orange.shade700,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 5),
+          action: SnackBarAction(
+            label: 'Set Location',
+            textColor: Colors.white,
+            onPressed: _showManualLocationPicker,
+          ),
+        ),
+      );
+    }
+  }
+
+  /// Show manual location picker when GPS fails
+  Future<void> _showManualLocationPicker() async {
+    // Default to a central location if no GPS available
+    const defaultLat = 0.0;
+    const defaultLng = 0.0;
+
+    final newLocation = await MapPickerBottomSheet.show(
+      context,
+      latitude: _currentLocation?.coordinates.lat.toDouble() ?? defaultLat,
+      longitude: _currentLocation?.coordinates.lng.toDouble() ?? defaultLng,
+      city: _city,
+      country: _country,
+    );
+
+    if (newLocation != null && mounted) {
+      setState(() {
+        _currentLocation = newLocation;
+      });
+
+      // Try reverse geocoding for the manually selected location
+      _reverseGeocodeIfOnline(
+        newLocation.coordinates.lat.toDouble(),
+        newLocation.coordinates.lng.toDouble(),
+      );
+    }
+  }
+
+  /// Reverse geocode only if online, otherwise skip (coordinates are sufficient)
+  Future<void> _reverseGeocodeIfOnline(double lat, double lng) async {
+    final connectivityService = context.read<ConnectivityService>();
+    if (!connectivityService.isOnline) {
+      AppLogger.info('Offline - skipping reverse geocoding, coordinates saved');
+      return;
+    }
+    await _reverseGeocode(lat, lng);
   }
 
   Future<void> _reverseGeocode(double lat, double lng) async {
@@ -168,7 +298,8 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen> {
           // Map detected items to PollutionType counts
           _typeCounts.clear();
           for (final entry in result.pollutionCounts.entries) {
-            final type = PollutionCalculations.mapItemToPollutionType(entry.key);
+            final type =
+                PollutionCalculations.mapItemToPollutionType(entry.key);
             if (type != null) {
               _typeCounts[type] = (_typeCounts[type] ?? 0) + entry.value;
             }
@@ -422,6 +553,16 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen> {
             isDark: isDark,
           ),
 
+          // Offline Banner
+          SliverToBoxAdapter(
+            child: Consumer<ConnectivityService>(
+              builder: (context, connectivity, _) {
+                if (connectivity.isOnline) return const SizedBox.shrink();
+                return const OfflineBanner();
+              },
+            ),
+          ),
+
           // Form Content
           SliverToBoxAdapter(
             child: Padding(
@@ -524,7 +665,8 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen> {
       severity: _severity,
     );
 
-    AppLogger.debug('Fraud Check: User counts: $_typeCounts, AI baseline: $_aiBaselineCounts, Fraud score: ${fraud.fraudScore}, Is suspicious: ${fraud.isSuspicious}, Warnings: ${fraud.warnings}');
+    AppLogger.debug(
+        'Fraud Check: User counts: $_typeCounts, AI baseline: $_aiBaselineCounts, Fraud score: ${fraud.fraudScore}, Is suspicious: ${fraud.isSuspicious}, Warnings: ${fraud.warnings}');
 
     if (fraud.isSuspicious) {
       // Show warning popup

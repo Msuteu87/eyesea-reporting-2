@@ -3,19 +3,30 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/services/secure_storage_service.dart';
+import '../../core/services/profile_cache_service.dart';
+import '../../core/services/connectivity_service.dart';
 import '../../domain/entities/user.dart';
 import '../../domain/repositories/auth_repository.dart';
 import '../../core/utils/logger.dart';
 
 class AuthProvider extends ChangeNotifier {
   final AuthRepository _authRepository;
+  final ProfileCacheService _profileCacheService;
+  final ConnectivityService _connectivityService;
+
   UserEntity? _currentUser;
   bool _isLoading = false;
   bool _isOnboardingComplete = false;
   bool _isInitialized = false;
+  bool _isOfflineMode = false;
   StreamSubscription<UserEntity?>? _authStateSubscription;
+  StreamSubscription<bool>? _connectivitySubscription;
 
-  AuthProvider(this._authRepository) {
+  AuthProvider(
+    this._authRepository,
+    this._profileCacheService,
+    this._connectivityService,
+  ) {
     _init();
   }
 
@@ -24,6 +35,7 @@ class AuthProvider extends ChangeNotifier {
   bool get isAuthenticated => _currentUser != null;
   bool get isOnboardingComplete => _isOnboardingComplete;
   bool get isInitialized => _isInitialized;
+  bool get isOfflineMode => _isOfflineMode;
 
   /// Public method to trigger router refresh (e.g., after splash completes)
   void refresh() => notifyListeners();
@@ -33,24 +45,91 @@ class AuthProvider extends ChangeNotifier {
 
     // Fetch full profile data immediately if logged in
     if (_currentUser != null) {
-      final fullUser = await _authRepository.fetchCurrentUser();
-      if (fullUser != null) {
-        _currentUser = fullUser;
-      }
+      await _fetchOrLoadCachedProfile();
       // One-time migration from SharedPreferences to SecureStorage
-      await _migrateFromSharedPreferences(_currentUser!.id);
+      if (_currentUser != null) {
+        await _migrateFromSharedPreferences(_currentUser!.id);
+      }
     }
     notifyListeners();
 
-    _authStateSubscription = _authRepository.onAuthStateChanged.listen((user) {
+    _authStateSubscription = _authRepository.onAuthStateChanged.listen((user) async {
       _currentUser = user;
-      checkOnboardingStatus(); // Re-evaluate when user data changes (e.g. login/signup)
+      if (user != null) {
+        // Fetch full profile on auth state change (login)
+        await _fetchOrLoadCachedProfile();
+      } else {
+        // Clear cache on logout
+        await _profileCacheService.clearCache();
+        _isOfflineMode = false;
+      }
+      checkOnboardingStatus();
       notifyListeners();
+    });
+
+    // Listen for connectivity changes to refresh profile when back online
+    _connectivitySubscription = _connectivityService.onConnectivityChanged.listen((isOnline) async {
+      if (isOnline && _isOfflineMode && _currentUser != null) {
+        AppLogger.info('Back online - refreshing profile');
+        await _refreshProfileFromNetwork();
+      }
     });
 
     await checkOnboardingStatus();
     _isInitialized = true;
     notifyListeners();
+  }
+
+  /// Fetch profile from network, or fall back to cache if offline
+  Future<void> _fetchOrLoadCachedProfile() async {
+    try {
+      final fullUser = await _authRepository.fetchCurrentUser();
+      if (fullUser != null) {
+        _currentUser = fullUser;
+        _isOfflineMode = false;
+        // Cache the profile for offline use
+        await _profileCacheService.cacheProfile(fullUser);
+        AppLogger.info('Profile fetched and cached');
+      }
+    } catch (e) {
+      AppLogger.warning('Failed to fetch profile from network: $e');
+      // Try to load from cache
+      await _loadProfileFromCache();
+    }
+  }
+
+  /// Load profile from local cache (for offline mode)
+  Future<void> _loadProfileFromCache() async {
+    final basicUser = _authRepository.currentUser;
+    if (basicUser == null) return;
+
+    final cachedProfile = await _profileCacheService.getCachedProfile();
+    if (cachedProfile != null && cachedProfile.id == basicUser.id) {
+      _currentUser = cachedProfile;
+      _isOfflineMode = true;
+      AppLogger.info('Loaded profile from cache (offline mode)');
+    } else {
+      // No cache available - use basic user info from Supabase session
+      _currentUser = basicUser;
+      _isOfflineMode = true;
+      AppLogger.info('Using basic profile from session (offline mode, no cache)');
+    }
+  }
+
+  /// Refresh profile from network when connectivity is restored
+  Future<void> _refreshProfileFromNetwork() async {
+    try {
+      final fullUser = await _authRepository.fetchCurrentUser();
+      if (fullUser != null) {
+        _currentUser = fullUser;
+        _isOfflineMode = false;
+        await _profileCacheService.cacheProfile(fullUser);
+        notifyListeners();
+        AppLogger.info('Profile refreshed after reconnection');
+      }
+    } catch (e) {
+      AppLogger.warning('Failed to refresh profile: $e');
+    }
   }
 
   /// Migrates onboarding status from SharedPreferences to SecureStorage (one-time)
@@ -203,6 +282,8 @@ class AuthProvider extends ChangeNotifier {
       final updatedUser = await _authRepository.fetchCurrentUser();
       if (updatedUser != null) {
         _currentUser = updatedUser;
+        // Update cache with new profile data
+        await _profileCacheService.cacheProfile(updatedUser);
       }
     } catch (e) {
       AppLogger.error('Failed to update profile: $e');
@@ -227,6 +308,8 @@ class AuthProvider extends ChangeNotifier {
       final updatedUser = await _authRepository.fetchCurrentUser();
       if (updatedUser != null) {
         _currentUser = updatedUser;
+        // Update cache with new avatar URL
+        await _profileCacheService.cacheProfile(updatedUser);
       }
     } catch (e) {
       AppLogger.error('Failed to upload avatar: $e');
@@ -240,6 +323,7 @@ class AuthProvider extends ChangeNotifier {
   @override
   void dispose() {
     _authStateSubscription?.cancel();
+    _connectivitySubscription?.cancel();
     super.dispose();
   }
 }

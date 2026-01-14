@@ -7,6 +7,7 @@ import 'app.dart';
 import 'core/secrets.dart';
 import 'core/utils/logger.dart';
 import 'core/services/connectivity_service.dart';
+import 'core/services/profile_cache_service.dart';
 import 'core/services/report_cache_service.dart';
 import 'core/services/report_queue_service.dart';
 import 'core/services/notification_service.dart';
@@ -77,17 +78,27 @@ Future<void> main() async {
   final supabaseClient = Supabase.instance.client;
   final authDataSource = AuthDataSource(supabaseClient);
   final authRepository = AuthRepositoryImpl(authDataSource);
-  final authProvider = AuthProvider(authRepository);
+
+  // Initialize connectivity service first (needed by AuthProvider)
+  final connectivityService = ConnectivityService();
+  await connectivityService.initialize();
+
+  // Initialize profile cache for offline auth support
+  final profileCacheService = ProfileCacheService();
+  await profileCacheService.initialize();
+  AppLogger.info('Profile cache service initialized');
+
+  final authProvider = AuthProvider(
+    authRepository,
+    profileCacheService,
+    connectivityService,
+  );
 
   final orgDataSource = OrganizationDataSource(supabaseClient);
   final orgRepository = OrganizationRepositoryImpl(orgDataSource);
 
   final eventDataSource = EventDataSource(supabaseClient);
   final eventRepository = EventRepositoryImpl(eventDataSource, supabaseClient);
-
-  // Initialize connectivity and queue services
-  final connectivityService = ConnectivityService();
-  await connectivityService.initialize();
 
   final reportDataSource = ReportDataSource(supabaseClient);
   final reportRepository = ReportRepositoryImpl(reportDataSource);

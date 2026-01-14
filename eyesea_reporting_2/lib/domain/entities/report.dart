@@ -39,7 +39,7 @@ enum ReportStatus {
 
 class ReportEntity {
   final String id;
-  final String userId;
+  final String? userId;
   final String? orgId;
   final Point location;
   final String? address;
@@ -58,7 +58,7 @@ class ReportEntity {
 
   ReportEntity({
     required this.id,
-    required this.userId,
+    this.userId,
     this.orgId,
     required this.location,
     this.address,
@@ -207,7 +207,7 @@ class ReportEntity {
 
     return ReportEntity(
       id: json['id'] as String,
-      userId: json['user_id'] as String,
+      userId: json['user_id'] as String?,
       orgId: json['org_id'] as String?,
       location: location,
       address: json['address'] as String?,

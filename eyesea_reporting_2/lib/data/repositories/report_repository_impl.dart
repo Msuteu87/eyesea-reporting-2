@@ -42,9 +42,9 @@ class ReportRepositoryImpl implements ReportRepository {
     final createdReport = await _dataSource.createReport(reportData);
     final reportId = createdReport['id'] as String;
 
-    // 2. Upload Image
+    // 2. Upload Image (userId should always exist for app submissions, fallback to 'anonymous')
     final publicUrl =
-        await _dataSource.uploadReportImage(report.userId, reportId, imageFile);
+        await _dataSource.uploadReportImage(report.userId ?? 'anonymous', reportId, imageFile);
 
     // 3. Create Image Record
     await _dataSource.createReportImageRecord(reportId, publicUrl, true);

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -6,8 +7,30 @@ import 'package:eyesea_reporting_2/app.dart';
 import 'package:eyesea_reporting_2/presentation/providers/auth_provider.dart';
 import 'package:eyesea_reporting_2/domain/repositories/auth_repository.dart';
 import 'package:eyesea_reporting_2/domain/entities/user.dart';
+import 'package:eyesea_reporting_2/core/services/profile_cache_service.dart';
+import 'package:eyesea_reporting_2/core/services/connectivity_service.dart';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+class MockProfileCacheService extends ProfileCacheService {
+  @override
+  Future<void> initialize() async {}
+  @override
+  Future<void> cacheProfile(UserEntity user) async {}
+  @override
+  Future<UserEntity?> getCachedProfile() async => null;
+  @override
+  Future<void> clearCache() async {}
+}
+
+class MockConnectivityService extends ConnectivityService {
+  @override
+  bool get isOnline => true;
+  @override
+  Stream<bool> get onConnectivityChanged => Stream.value(true);
+  @override
+  Future<void> initialize() async {}
+}
 
 class MockAuthRepository implements AuthRepository {
   @override
@@ -43,7 +66,9 @@ class MockAuthRepository implements AuthRepository {
 void main() {
   testWidgets('App renders home screen', (WidgetTester tester) async {
     final repo = MockAuthRepository();
-    final authProvider = AuthProvider(repo);
+    final profileCache = MockProfileCacheService();
+    final connectivity = MockConnectivityService();
+    final authProvider = AuthProvider(repo, profileCache, connectivity);
 
     final router = GoRouter(
       routes: [

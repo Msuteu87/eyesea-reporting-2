@@ -51,8 +51,8 @@ class _LoginScreenState extends State<LoginScreen> {
       } catch (_) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text('Login failed. Please try again.'),
+            const SnackBar(
+              content: Text('Login failed. Please try again.'),
               backgroundColor: AppColors.error,
               behavior: SnackBarBehavior.floating,
             ),
@@ -77,8 +77,8 @@ class _LoginScreenState extends State<LoginScreen> {
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Sign in failed. Please try again.'),
+          const SnackBar(
+            content: Text('Sign in failed. Please try again.'),
             backgroundColor: AppColors.error,
           ),
         );
@@ -213,7 +213,8 @@ class _LoginScreenState extends State<LoginScreen> {
                                     ),
                                   ),
                                   validator: (value) =>
-                                      Validators.validatePassword(value, minLength: 6),
+                                      Validators.validatePassword(value,
+                                          minLength: 6),
                                 ),
                                 const SizedBox(height: 20),
                                 FilledButton(
