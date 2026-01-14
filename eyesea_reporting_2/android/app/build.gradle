@@ -52,6 +52,13 @@ android {
         versionCode = flutterVersionCode.toInteger()
         versionName = flutterVersionName
         multiDexEnabled true
+
+        // Externalize Mapbox token from gradle.properties
+        manifestPlaceholders += [
+            MAPBOX_ACCESS_TOKEN: project.hasProperty('MAPBOX_ACCESS_TOKEN')
+                ? project.property('MAPBOX_ACCESS_TOKEN')
+                : ''
+        ]
     }
 
     signingConfigs {

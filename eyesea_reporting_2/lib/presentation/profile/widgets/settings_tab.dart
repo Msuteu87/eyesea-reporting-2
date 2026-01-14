@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/services/notification_service.dart';
 import '../../providers/auth_provider.dart';
+import '../../legal/legal_viewer_screen.dart';
 
 class SettingsTab extends StatefulWidget {
   const SettingsTab({super.key});
@@ -149,6 +150,26 @@ class _SettingsTabState extends State<SettingsTab> {
     }
   }
 
+  void _openLegalDocument(BuildContext context, String title, String assetPath) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => LegalViewerScreen(
+          title: title,
+          assetPath: assetPath,
+        ),
+      ),
+    );
+  }
+
+  void _showOpenSourceLicenses(BuildContext context) {
+    showLicensePage(
+      context: context,
+      applicationName: 'Eyesea Reporting',
+      applicationVersion: '1.0.0',
+      applicationLegalese: '© 2025 Marius Catalin Suteu / Eyesea. All rights reserved.',
+    );
+  }
+
   Future<void> _handleDeleteAccount() async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -246,6 +267,60 @@ class _SettingsTabState extends State<SettingsTab> {
             ),
           ],
         ).animate().fadeIn(delay: 200.ms).slideX(begin: 0.1),
+
+        const SizedBox(height: 24),
+
+        // Legal Section
+        _buildSectionHeader(context, 'Legal', LucideIcons.scale),
+        const SizedBox(height: 12),
+        _buildSettingsCard(
+          context,
+          children: [
+            _buildActionTile(
+              context,
+              title: 'Terms of Service',
+              subtitle: 'Read our terms and conditions',
+              icon: LucideIcons.fileText,
+              onTap: () => _openLegalDocument(
+                context,
+                'Terms of Service',
+                'assets/legal/terms_of_service.md',
+              ),
+            ),
+            const Divider(height: 1),
+            _buildActionTile(
+              context,
+              title: 'Privacy Policy',
+              subtitle: 'How we handle your data',
+              icon: LucideIcons.shield,
+              onTap: () => _openLegalDocument(
+                context,
+                'Privacy Policy',
+                'assets/legal/privacy_policy.md',
+              ),
+            ),
+            const Divider(height: 1),
+            _buildActionTile(
+              context,
+              title: 'EULA',
+              subtitle: 'End User License Agreement',
+              icon: LucideIcons.fileBadge,
+              onTap: () => _openLegalDocument(
+                context,
+                'EULA',
+                'assets/legal/eula.md',
+              ),
+            ),
+            const Divider(height: 1),
+            _buildActionTile(
+              context,
+              title: 'Open Source Licenses',
+              subtitle: 'Third-party software licenses',
+              icon: LucideIcons.code2,
+              onTap: () => _showOpenSourceLicenses(context),
+            ),
+          ],
+        ).animate().fadeIn(delay: 250.ms).slideX(begin: 0.1),
 
         const SizedBox(height: 32),
 

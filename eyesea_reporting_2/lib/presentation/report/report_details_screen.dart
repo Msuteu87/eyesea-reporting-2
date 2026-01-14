@@ -9,9 +9,11 @@ import 'package:geolocator/geolocator.dart' as geo;
 import 'package:provider/provider.dart';
 
 import '../../core/theme/app_colors.dart';
+import '../../core/utils/logger.dart';
 import '../../core/services/connectivity_service.dart';
 import '../../core/services/report_queue_service.dart';
 import '../../core/services/ai_analysis_service.dart';
+import '../../core/services/geocoding_service.dart';
 import '../../core/utils/pollution_calculations.dart';
 import '../../domain/entities/report.dart';
 import 'widgets/pollution_type_selector.dart';
@@ -19,6 +21,8 @@ import 'widgets/location_scene_card.dart';
 import 'widgets/map_picker_bottom_sheet.dart';
 import 'widgets/severity_selector.dart';
 import 'widgets/report_summary_card.dart';
+import 'widgets/report_image_header.dart';
+import 'widgets/report_submit_button.dart';
 
 /// Report details screen - receives captured/selected image and allows user
 /// to fill in pollution details before submitting.
@@ -85,29 +89,57 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen> {
         _reverseGeocode(position.latitude, position.longitude);
       }
     } catch (e) {
-      debugPrint('Error getting location: $e');
+      AppLogger.error('Error getting location: $e');
     }
   }
 
   Future<void> _reverseGeocode(double lat, double lng) async {
+    String? city;
+    String? country;
+
+    // First try native Android/iOS geocoder
     try {
       final placemarks = await geocoding.placemarkFromCoordinates(lat, lng);
-      if (placemarks.isNotEmpty && mounted) {
+      if (placemarks.isNotEmpty) {
         final place = placemarks.first;
-        final city = place.locality ??
+        city = place.locality ??
             place.subAdministrativeArea ??
             place.administrativeArea;
-        final country = place.country;
-
-        setState(() {
-          _city = city;
-          _country = country;
-        });
-        debugPrint('📍 Location: $_city, $_country');
+        country = place.country;
+        AppLogger.info('Native geocoding: city=$city, country=$country');
       }
     } catch (e) {
-      debugPrint('Reverse geocoding failed: $e');
-      // Fallback variables are null, which is fine
+      AppLogger.debug('Native geocoding failed: $e');
+    }
+
+    // Fallback to Mapbox geocoding if city is missing
+    if (city == null || city.isEmpty) {
+      AppLogger.info('City missing, trying Mapbox geocoding...');
+      try {
+        final result = await GeocodingService.reverseGeocode(lat, lng);
+        if (result != null) {
+          // Parse city and country from Mapbox result
+          // fullPlaceName format: "City, Region, Country"
+          final parts = result.fullPlaceName.split(', ');
+          if (parts.isNotEmpty) {
+            city = result.placeName;
+            if (parts.length > 1) {
+              country ??= parts.last;
+            }
+          }
+          AppLogger.info('Mapbox geocoding: city=$city, country=$country');
+        }
+      } catch (e) {
+        AppLogger.debug('Mapbox geocoding failed: $e');
+      }
+    }
+
+    if (mounted) {
+      setState(() {
+        _city = city;
+        _country = country;
+      });
+      AppLogger.info('Final location: $_city, $_country');
     }
   }
 
@@ -134,7 +166,7 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen> {
           // Map detected items to PollutionType counts
           _typeCounts.clear();
           for (final entry in result.pollutionCounts.entries) {
-            final type = _mapItemToType(entry.key);
+            final type = PollutionCalculations.mapItemToPollutionType(entry.key);
             if (type != null) {
               _typeCounts[type] = (_typeCounts[type] ?? 0) + entry.value;
             }
@@ -184,7 +216,7 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen> {
               detectedTypes.add(type);
               detectedCounts[type] = entry.value;
             } catch (e) {
-              debugPrint('Unknown pollution type: ${entry.key}');
+              AppLogger.debug('Unknown pollution type: ${entry.key}');
             }
           }
 
@@ -232,7 +264,7 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen> {
         }
       }
     } catch (e) {
-      debugPrint('AI Analysis UI Error: $e');
+      AppLogger.error('AI Analysis UI Error: $e');
     } finally {
       if (mounted) setState(() => _isAnalyzing = false);
     }
@@ -254,22 +286,11 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen> {
         _currentLocation = newLocation;
       });
 
-      // Re-run reverse geocoding for new location
-      try {
-        final placemarks = await geocoding.placemarkFromCoordinates(
-          newLocation.coordinates.lat.toDouble(),
-          newLocation.coordinates.lng.toDouble(),
-        );
-        if (placemarks.isNotEmpty && mounted) {
-          final place = placemarks.first;
-          setState(() {
-            _city = place.locality ?? place.subAdministrativeArea;
-            _country = place.country;
-          });
-        }
-      } catch (e) {
-        debugPrint('Reverse geocoding after move failed: $e');
-      }
+      // Re-run reverse geocoding for new location using the improved method
+      await _reverseGeocode(
+        newLocation.coordinates.lat.toDouble(),
+        newLocation.coordinates.lng.toDouble(),
+      );
     }
   }
 
@@ -368,7 +389,7 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen> {
         context.go('/');
       }
     } catch (e) {
-      debugPrint('Submit error: $e');
+      AppLogger.error('Submit error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -393,90 +414,10 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen> {
       body: CustomScrollView(
         slivers: [
           // Image Header with App Bar
-          SliverAppBar(
-            expandedHeight: 300,
-            pinned: true,
-            backgroundColor: isDark ? AppColors.deepNavy : Colors.white,
-            leading: IconButton(
-              icon: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.5),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(LucideIcons.arrowLeft, color: Colors.white),
-              ),
-              onPressed: () => Navigator.pop(context),
-            ),
-            flexibleSpace: FlexibleSpaceBar(
-              background: Stack(
-                fit: StackFit.expand,
-                children: [
-                  Image.file(
-                    _imageFile,
-                    fit: BoxFit.cover,
-                  ),
-                  // Gradient overlay for readability
-                  Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Colors.black.withValues(alpha: 0.3),
-                          Colors.transparent,
-                          Colors.black.withValues(alpha: 0.5),
-                        ],
-                      ),
-                    ),
-                  ),
-                  // Retake Button
-                  Positioned(
-                    bottom: 16,
-                    right: 16,
-                    child: Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        onTap: () => Navigator.pop(context),
-                        borderRadius: BorderRadius.circular(20),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.6),
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                              color: Colors.white.withValues(alpha: 0.3),
-                            ),
-                          ),
-                          child: const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                LucideIcons.camera,
-                                color: Colors.white,
-                                size: 16,
-                              ),
-                              SizedBox(width: 6),
-                              Text(
-                                'Retake',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 13,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+          ReportImageHeader(
+            imageFile: _imageFile,
+            onRetake: () => Navigator.pop(context),
+            isDark: isDark,
           ),
 
           // Form Content
@@ -550,7 +491,18 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen> {
                   const SizedBox(height: 40),
 
                   // Submit Button
-                  _buildSubmitButton(primaryColor),
+                  ReportSubmitButton(
+                    isSubmitting: _isSubmitting,
+                    hasPeopleDetected: _hasPeopleDetected,
+                    totalXP: PollutionCalculations.calculateXP(
+                      typeCounts: _typeCounts,
+                      severity: _severity,
+                      hasLocation: _currentLocation != null,
+                      hasPhoto: true,
+                      sceneLabels: _sceneLabels,
+                    ),
+                    onSubmit: _handleSubmitWithFraudCheck,
+                  ),
 
                   const SizedBox(height: 32),
                 ],
@@ -562,95 +514,6 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen> {
     );
   }
 
-  Widget _buildSubmitButton(Color primaryColor) {
-    // Block submission if analyzing OR if people detected
-    final isDisabled = _isSubmitting || _hasPeopleDetected;
-
-    // Calculate XP for button text
-    final totalXP = PollutionCalculations.calculateXP(
-      typeCounts: _typeCounts,
-      severity: _severity,
-      hasLocation: _currentLocation != null,
-      hasPhoto: true,
-      sceneLabels: _sceneLabels,
-    );
-
-    return Column(
-      children: [
-        if (_hasPeopleDetected)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 16),
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppColors.punchRed.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.punchRed),
-              ),
-              child: const Row(
-                children: [
-                  Icon(LucideIcons.userX, color: AppColors.punchRed),
-                  SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      'For privacy reasons, you cannot submit reports containing people. Please retake the photo.',
-                      style: TextStyle(
-                        color: AppColors.punchRed,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ).animate().fadeIn(),
-        SizedBox(
-          width: double.infinity,
-          height: 56,
-          child: FilledButton(
-            onPressed: isDisabled ? null : _handleSubmitWithFraudCheck,
-            style: FilledButton.styleFrom(
-              backgroundColor: primaryColor,
-              disabledBackgroundColor: _hasPeopleDetected
-                  ? Colors.grey[400]
-                  : primaryColor.withValues(alpha: 0.5),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-            ),
-            child: _isSubmitting
-                ? const SizedBox(
-                    width: 24,
-                    height: 24,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2.5,
-                      color: Colors.white,
-                    ),
-                  )
-                : Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(LucideIcons.send, size: 20),
-                      const SizedBox(width: 12),
-                      Text(
-                        _hasPeopleDetected
-                            ? 'Cannot Submit (People Detected)'
-                            : 'Submit Report (+$totalXP XP)',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                    ],
-                  ),
-          ),
-        ),
-      ],
-    );
-  }
-
   void _handleSubmitWithFraudCheck() {
     // Check for fraud before submitting
     final fraud = PollutionCalculations.detectFraud(
@@ -659,12 +522,7 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen> {
       severity: _severity,
     );
 
-    debugPrint('🔍 Fraud Check:');
-    debugPrint('   User counts: $_typeCounts');
-    debugPrint('   AI baseline: $_aiBaselineCounts');
-    debugPrint('   Fraud score: ${fraud.fraudScore}');
-    debugPrint('   Is suspicious: ${fraud.isSuspicious}');
-    debugPrint('   Warnings: ${fraud.warnings}');
+    AppLogger.debug('Fraud Check: User counts: $_typeCounts, AI baseline: $_aiBaselineCounts, Fraud score: ${fraud.fraudScore}, Is suspicious: ${fraud.isSuspicious}, Warnings: ${fraud.warnings}');
 
     if (fraud.isSuspicious) {
       // Show warning popup
@@ -727,67 +585,6 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen> {
       // No fraud detected, submit directly
       _submitReport();
     }
-  }
-
-  /// Maps YOLO-detected object names to PollutionType
-  /// Must stay in sync with AIAnalysisService._mapAllPollutionTypes()
-  PollutionType? _mapItemToType(String item) {
-    const Map<String, PollutionType> objectToType = {
-      // Plastic items (bottles, cups - genuine plastic)
-      'bottle': PollutionType.plastic,
-      'cup': PollutionType.plastic,
-      'toothbrush': PollutionType.plastic,
-
-      // Debris/General waste (glass, ceramic, sports equipment, food, e-waste)
-      'bowl': PollutionType.debris,
-      'vase': PollutionType.debris,
-      'wine glass': PollutionType.debris,
-      'handbag': PollutionType.debris,
-      'backpack': PollutionType.debris,
-      'suitcase': PollutionType.debris,
-      'umbrella': PollutionType.debris,
-
-      // Sports equipment (common beach/outdoor litter)
-      'sports ball': PollutionType.debris,
-      'frisbee': PollutionType.debris,
-      'kite': PollutionType.debris,
-      'surfboard': PollutionType.debris,
-      'skateboard': PollutionType.debris,
-      'tennis racket': PollutionType.debris,
-      'baseball bat': PollutionType.debris,
-      'baseball glove': PollutionType.debris,
-
-      // Food waste
-      'banana': PollutionType.debris,
-      'apple': PollutionType.debris,
-      'orange': PollutionType.debris,
-      'sandwich': PollutionType.debris,
-      'hot dog': PollutionType.debris,
-      'pizza': PollutionType.debris,
-      'donut': PollutionType.debris,
-      'cake': PollutionType.debris,
-      'broccoli': PollutionType.debris,
-      'carrot': PollutionType.debris,
-
-      // E-waste & small items
-      'cell phone': PollutionType.debris,
-      'remote': PollutionType.debris,
-      'book': PollutionType.debris,
-      'tie': PollutionType.debris,
-
-      // Vehicles (dumped/abandoned)
-      'bicycle': PollutionType.debris,
-      'car': PollutionType.debris,
-      'motorcycle': PollutionType.debris,
-
-      // Furniture
-      'bench': PollutionType.debris,
-
-      // Marine equipment
-      'boat': PollutionType.fishingGear,
-    };
-
-    return objectToType[item.toLowerCase()];
   }
 
   Widget _buildPollutionTypeSelector(Color primaryColor, bool isDark) {

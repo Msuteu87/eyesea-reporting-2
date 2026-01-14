@@ -1,5 +1,5 @@
 import 'dart:io';
-import 'package:flutter/foundation.dart';
+import '../../core/utils/logger.dart';
 import '../../domain/entities/report.dart';
 import '../../domain/repositories/report_repository.dart';
 import '../datasources/report_data_source.dart';
@@ -15,7 +15,7 @@ class ReportRepositoryImpl implements ReportRepository {
       final data = await _dataSource.fetchReports();
       return data.map((json) => ReportEntity.fromJson(json)).toList();
     } catch (e) {
-      debugPrint('Error fetching reports: $e');
+      AppLogger.error('Error fetching reports: $e');
       return [];
     }
   }

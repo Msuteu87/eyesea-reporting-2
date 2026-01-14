@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import '../../core/utils/logger.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' hide ImageSource;
 import 'package:geolocator/geolocator.dart' as geo;
 import 'package:provider/provider.dart';
@@ -46,7 +47,7 @@ class _ReportScreenState extends State<ReportScreen> {
             Point(coordinates: Position(position.longitude, position.latitude));
       });
     } catch (e) {
-      debugPrint('Error getting location: $e');
+      AppLogger.error('Error getting location: $e');
     }
   }
 

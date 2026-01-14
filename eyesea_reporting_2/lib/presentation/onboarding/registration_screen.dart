@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/utils/logger.dart';
 import '../../domain/entities/user.dart';
 import '../../domain/entities/organization.dart';
 import '../../domain/entities/vessel.dart';
@@ -57,7 +58,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
         setState(() => _shippingCompanies = orgs);
       }
     } catch (e) {
-      debugPrint('Error fetching organizations: $e');
+      AppLogger.error('Error fetching organizations', e);
     } finally {
       if (mounted) {}
     }
@@ -76,7 +77,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
         setState(() => _vessels = vessels);
       }
     } catch (e) {
-      debugPrint('Error fetching vessels: $e');
+      AppLogger.error('Error fetching vessels', e);
     } finally {
       if (mounted) setState(() => _isLoadingVessels = false);
     }

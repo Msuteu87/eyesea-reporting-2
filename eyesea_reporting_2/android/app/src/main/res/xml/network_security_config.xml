@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- Base config: Disable cleartext (HTTP) traffic, trust system CAs only -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+
+    <!-- Domain-specific config for known API endpoints -->
+    <domain-config cleartextTrafficPermitted="false">
+        <!-- Supabase backend -->
+        <domain includeSubdomains="true">supabase.co</domain>
+        <!-- Mapbox APIs -->
+        <domain includeSubdomains="true">mapbox.com</domain>
+        <!-- Google Fonts -->
+        <domain includeSubdomains="true">fonts.googleapis.com</domain>
+        <domain includeSubdomains="true">fonts.gstatic.com</domain>
+    </domain-config>
+
+    <!-- Debug overrides: Allow user-installed CAs for debugging with proxies like Charles -->
+    <debug-overrides>
+        <trust-anchors>
+            <certificates src="user" />
+            <certificates src="system" />
+        </trust-anchors>
+    </debug-overrides>
+</network-security-config>

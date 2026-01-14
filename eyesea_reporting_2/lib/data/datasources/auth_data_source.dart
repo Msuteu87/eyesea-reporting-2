@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/errors/exceptions.dart';
 import '../../core/utils/logger.dart';
 
+
 /// Data source for authentication operations.
 class AuthDataSource {
   final SupabaseClient _supabase;
@@ -126,7 +127,7 @@ class AuthDataSource {
           .maybeSingle();
       return response?['org_id'] as String?;
     } catch (e) {
-      debugPrint('[AuthDataSource] Failed to fetch vessel org_id: $e');
+      AppLogger.error('[AuthDataSource] Failed to fetch vessel org_id', e);
       return null;
     }
   }
@@ -144,7 +145,7 @@ class AuthDataSource {
         onConflict: 'user_id,org_id',
       );
     } catch (e) {
-      debugPrint('[AuthDataSource] Failed to upsert organization member: $e');
+      AppLogger.error('[AuthDataSource] Failed to upsert organization member', e);
       // Don't throw - membership is secondary to profile update
     }
   }

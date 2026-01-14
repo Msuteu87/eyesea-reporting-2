@@ -1,7 +1,7 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../secrets.dart';
+import '../utils/logger.dart';
 
 /// Service for geocoding locations using Mapbox Geocoding API.
 class GeocodingService {
@@ -36,7 +36,7 @@ class GeocodingService {
       final response = await http.get(url);
 
       if (response.statusCode != 200) {
-        debugPrint('[Geocoding] Error: ${response.statusCode} ${response.body}');
+        AppLogger.error('[Geocoding] Error: ${response.statusCode} ${response.body}');
         return [];
       }
 
@@ -68,7 +68,7 @@ class GeocodingService {
         );
       }).toList();
     } catch (e) {
-      debugPrint('[Geocoding] Exception: $e');
+      AppLogger.error('[Geocoding] Exception', e);
       return [];
     }
   }
@@ -90,7 +90,7 @@ class GeocodingService {
       final response = await http.get(url);
 
       if (response.statusCode != 200) {
-        debugPrint('[Geocoding] Reverse error: ${response.statusCode}');
+        AppLogger.error('[Geocoding] Reverse error: ${response.statusCode}');
         return null;
       }
 
@@ -110,7 +110,7 @@ class GeocodingService {
         latitude: (coordinates[1] as num).toDouble(),
       );
     } catch (e) {
-      debugPrint('[Geocoding] Reverse exception: $e');
+      AppLogger.error('[Geocoding] Reverse exception', e);
       return null;
     }
   }

@@ -4,6 +4,7 @@ import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' hide ImageSource;
 import 'package:geolocator/geolocator.dart' as geo;
 import 'package:provider/provider.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/utils/logger.dart';
 import '../../core/utils/map_pin_generator.dart';
 import '../../domain/entities/report.dart';
 import '../providers/auth_provider.dart';
@@ -21,7 +22,7 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   geo.Position? _currentPosition;
   bool _isLoadingLocation = true;
   MapboxMap? _mapboxMap;
@@ -30,6 +31,9 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _pinImagesAdded = false;
   MapMarkerData? _selectedMarker;
   String? _currentMapStyle;
+
+  // Save reference to provider to safely remove listener in dispose
+  ReportsMapProvider? _reportsProvider;
 
   // Mapbox style: dynamic based on theme
   String get _mapStyle {
@@ -40,16 +44,29 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _getCurrentLocation();
     // Listen for provider updates to re-render markers
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final reportsProvider = context.read<ReportsMapProvider>();
-      reportsProvider.addListener(_onMarkersUpdated);
+      if (!mounted) return;
+      _reportsProvider = context.read<ReportsMapProvider>();
+      _reportsProvider!.addListener(_onMarkersUpdated);
 
       // Set current user ID for "My Reports" filtering
       final authProvider = context.read<AuthProvider>();
-      reportsProvider.setCurrentUserId(authProvider.currentUser?.id);
+      _reportsProvider!.setCurrentUserId(authProvider.currentUser?.id);
     });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      AppLogger.info('HomeScreen: App resumed, checking location...');
+      // Re-get location if we don't have it (e.g., after returning from Settings)
+      if (_currentPosition == null) {
+        _getCurrentLocation();
+      }
+    }
   }
 
   @override
@@ -70,11 +87,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
     if (_currentMapStyle != newStyle) {
       _currentMapStyle = newStyle;
+      AppLogger.info('Updating map style to: $newStyle');
       _mapboxMap!.style.setStyleURI(newStyle).then((_) {
         if (!mounted) return;
+        AppLogger.info('Style updated successfully');
         // Re-apply custom layers after style change
         _renderMarkersWithClustering();
         _updateWaterColor(isDark);
+      }).catchError((e) {
+        AppLogger.error('Error updating map style: $e');
       });
     }
   }
@@ -86,7 +107,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _mapboxMap?.style
           .setStyleLayerProperty('water', 'fill-color', waterColor);
     } catch (e) {
-      debugPrint('Could not customize water color: $e');
+      AppLogger.debug('Could not customize water color: $e');
     }
   }
 
@@ -117,15 +138,17 @@ class _HomeScreenState extends State<HomeScreen> {
       }
 
       _pinImagesAdded = true;
-      debugPrint('📍 Pin marker images added to style');
+      AppLogger.info('Pin marker images added to style');
     } catch (e) {
-      debugPrint('❌ Error adding pin images: $e');
+      AppLogger.error('Error adding pin images: $e');
     }
   }
 
   @override
   void dispose() {
-    context.read<ReportsMapProvider>().removeListener(_onMarkersUpdated);
+    WidgetsBinding.instance.removeObserver(this);
+    // Use saved reference to avoid accessing deactivated context
+    _reportsProvider?.removeListener(_onMarkersUpdated);
     super.dispose();
   }
 
@@ -145,7 +168,7 @@ class _HomeScreenState extends State<HomeScreen> {
         });
       }
     } catch (e) {
-      debugPrint('Error getting location: $e');
+      AppLogger.error('Error getting location: $e');
       if (mounted) {
         setState(() {
           _isLoadingLocation = false;
@@ -157,51 +180,60 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _onMapCreated(MapboxMap mapboxMap) async {
     _mapboxMap = mapboxMap;
 
-    // Track initial style
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    _currentMapStyle = isDark ? MapboxStyles.DARK : MapboxStyles.LIGHT;
+    try {
+      // Track initial style
+      final isDark = Theme.of(context).brightness == Brightness.dark;
+      _currentMapStyle = isDark ? MapboxStyles.DARK : MapboxStyles.LIGHT;
 
-    // Disable scale bar ornament for cleaner UI
-    await mapboxMap.scaleBar.updateSettings(ScaleBarSettings(enabled: false));
+      AppLogger.info('Map created, initializing with style: $_currentMapStyle');
 
-    // Enable user location puck
-    await mapboxMap.location.updateSettings(
-      LocationComponentSettings(
-        enabled: true,
-        pulsingEnabled: true,
-        puckBearingEnabled: true,
-      ),
-    );
+      // Disable scale bar ornament for cleaner UI
+      await mapboxMap.scaleBar.updateSettings(ScaleBarSettings(enabled: false));
 
-    // Customize water color based on theme
-    _updateWaterColor(isDark);
-
-    // Generate and add pin marker images
-    await _addPinImagesToStyle();
-
-    // If we have location, fly to it
-    if (_currentPosition != null) {
-      await mapboxMap.flyTo(
-        CameraOptions(
-          center: Point(
-            coordinates: Position(
-              _currentPosition!.longitude,
-              _currentPosition!.latitude,
-            ),
-          ),
-          zoom: 15.0,
+      // Enable user location puck
+      await mapboxMap.location.updateSettings(
+        LocationComponentSettings(
+          enabled: true,
+          pulsingEnabled: true,
+          puckBearingEnabled: true,
         ),
-        MapAnimationOptions(duration: 1000),
       );
+
+      // Customize water color based on theme
+      _updateWaterColor(isDark);
+
+      // Generate and add pin marker images
+      await _addPinImagesToStyle();
+
+      // If we have location, fly to it
+      if (_currentPosition != null) {
+        await mapboxMap.flyTo(
+          CameraOptions(
+            center: Point(
+              coordinates: Position(
+                _currentPosition!.longitude,
+                _currentPosition!.latitude,
+              ),
+            ),
+            zoom: 15.0,
+          ),
+          MapAnimationOptions(duration: 1000),
+        );
+      }
+
+      // No longer using CircleAnnotationManager for clustering
+      // GeoJSON source + layers will be added in _setupClusterLayers
+
+      _mapReady = true;
+      AppLogger.info('Map ready, loading markers...');
+
+      // Load and display all markers
+      await _loadAllMarkers();
+    } catch (e, stackTrace) {
+      AppLogger.error('Error initializing map: $e', e, stackTrace);
+      // Still mark as ready so user can see something
+      _mapReady = true;
     }
-
-    // No longer using CircleAnnotationManager for clustering
-    // GeoJSON source + layers will be added in _setupClusterLayers
-
-    _mapReady = true;
-
-    // Load and display all markers
-    await _loadAllMarkers();
   }
 
   /// Load all markers (no viewport filtering for now - simplify)
@@ -230,16 +262,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
   /// Render markers using GeoJSON source with native Mapbox clustering
   Future<void> _renderMarkersWithClustering() async {
-    if (_mapboxMap == null || !mounted) {
-      debugPrint('📍 Cannot render markers: map not ready');
+    if (_mapboxMap == null || !mounted || _reportsProvider == null) {
+      AppLogger.debug(
+          'Cannot render markers: map not ready or provider not set');
       return;
     }
 
-    final provider = context.read<ReportsMapProvider>();
-    final markers = provider.filteredMarkers; // Use filtered markers
+    final markers = _reportsProvider!.filteredMarkers; // Use filtered markers
 
-    debugPrint(
-        '📍 Setting up clustering for ${markers.length} markers (filtered)');
+    AppLogger.info(
+        'Setting up clustering for ${markers.length} markers (filtered)');
 
     // Always remove existing layers first (even if no markers to display)
     try {
@@ -259,7 +291,7 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (_) {}
 
     if (markers.isEmpty) {
-      debugPrint('📍 No markers to display - cleared map');
+      AppLogger.info('No markers to display - cleared map');
       return;
     }
 
@@ -374,9 +406,9 @@ class _HomeScreenState extends State<HomeScreen> {
       // Add tap listener for cluster expansion (spiderfying)
       _mapboxMap!.setOnMapTapListener(_onMapTap);
 
-      debugPrint('📍 Clustering layers set up successfully');
+      AppLogger.info('Clustering layers set up successfully');
     } catch (e) {
-      debugPrint('❌ Error setting up clustering: $e');
+      AppLogger.error('Error setting up clustering: $e');
     }
   }
 
@@ -398,10 +430,13 @@ class _HomeScreenState extends State<HomeScreen> {
         final cluster = features.first;
         final queriedFeature = cluster?.queriedFeature;
         if (queriedFeature == null) return;
-        final feature = queriedFeature.feature as Map<String, dynamic>;
 
-        final geometry = feature['geometry'] as Map<String, dynamic>?;
-        if (geometry == null) return;
+        // Handle Mapbox's CastMap types by converting to standard Map
+        final feature = Map<String, dynamic>.from(queriedFeature.feature);
+
+        final geometryObj = feature['geometry'];
+        if (geometryObj == null) return;
+        final geometry = Map<String, dynamic>.from(geometryObj as Map);
 
         final coords = geometry['coordinates'] as List?;
         if (coords == null || coords.length < 2) return;
@@ -421,10 +456,10 @@ class _HomeScreenState extends State<HomeScreen> {
           MapAnimationOptions(duration: 500),
         );
 
-        debugPrint('📍 Zoomed into cluster at $lat, $lng (zoom: $newZoom)');
+        AppLogger.info('Zoomed into cluster at $lat, $lng (zoom: $newZoom)');
       }
     } catch (e) {
-      debugPrint('⚠️ Error handling map tap: $e');
+      AppLogger.warning('Error handling map tap: $e');
     }
 
     // Also query individual markers (unclustered-point layer)
@@ -439,13 +474,14 @@ class _HomeScreenState extends State<HomeScreen> {
         final queriedFeature = marker?.queriedFeature;
         if (queriedFeature == null) return;
 
-        // Handle Mapbox's CastMap types by checking type first
-        final featureObj = queriedFeature.feature;
+        // Handle Mapbox's CastMap types by converting to standard Map
+        final feature = Map<String, dynamic>.from(queriedFeature.feature);
 
-        final propertiesObj = featureObj['properties'];
-        if (propertiesObj is! Map) return;
+        final propertiesObj = feature['properties'];
+        if (propertiesObj == null) return;
+        final properties = Map<String, dynamic>.from(propertiesObj as Map);
 
-        final markerId = propertiesObj['id']?.toString();
+        final markerId = properties['id']?.toString();
         if (markerId != null) {
           // Find matching marker in provider
           final provider = this.context.read<ReportsMapProvider>();
@@ -459,7 +495,7 @@ class _HomeScreenState extends State<HomeScreen> {
               _selectedMarker = matchingMarker;
             });
           }
-          debugPrint('📍 Selected marker: ${matchingMarker.id}');
+          AppLogger.info('Selected marker: ${matchingMarker.id}');
         }
       } else if (_selectedMarker != null && mounted) {
         // Tapped on empty space - deselect
@@ -468,7 +504,7 @@ class _HomeScreenState extends State<HomeScreen> {
         });
       }
     } catch (e) {
-      debugPrint('⚠️ Error querying markers: $e');
+      AppLogger.warning('Error querying markers: $e');
     }
   }
 
@@ -551,7 +587,6 @@ class _HomeScreenState extends State<HomeScreen> {
               bottom: 105,
               child: ReportDetailCard(
                 marker: _selectedMarker!,
-                imageUrl: _selectedMarker!.imageUrl,
                 onClose: () {
                   if (mounted) {
                     setState(() {
@@ -580,7 +615,7 @@ class _HomeScreenState extends State<HomeScreen> {
           AnimatedPositioned(
             duration: const Duration(milliseconds: 300),
             curve: Curves.easeOutCubic,
-            bottom: _selectedMarker != null ? 266 : 131,
+            bottom: _selectedMarker != null ? 600 : 131,
             right: 16,
             child: Column(
               mainAxisSize: MainAxisSize.min,

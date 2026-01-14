@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:provider/provider.dart';
 import 'app.dart';
@@ -34,6 +35,10 @@ Future<void> main() async {
   // Initialize Hive for offline storage
   await Hive.initFlutter();
   AppLogger.info('Hive initialized');
+
+  // Set Mapbox access token programmatically (required for Android)
+  MapboxOptions.setAccessToken(Secrets.mapboxAccessToken);
+  AppLogger.info('Mapbox access token configured');
 
   // Prefer environment variables from command line, fallback to Secrets file
   const supabaseUrlEnv = String.fromEnvironment('SUPABASE_URL');

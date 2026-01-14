@@ -8,35 +8,42 @@ class ReportDataSource {
 
   ReportDataSource(this._supabase);
 
+  /// Fetches image URLs for a single report and attaches them to the report map
+  Future<void> _attachImagesToReport(Map<String, dynamic> report) async {
+    final reportId = report['id'] as String?;
+    if (reportId == null) return;
+
+    try {
+      final images = await _supabase
+          .from('report_images')
+          .select('storage_path, is_primary')
+          .eq('report_id', reportId)
+          .order('is_primary', ascending: false);
+
+      report['image_urls'] = (images as List)
+          .map((img) => img['storage_path'] as String?)
+          .where((url) => url != null)
+          .cast<String>()
+          .toList();
+    } catch (_) {
+      report['image_urls'] = <String>[];
+    }
+  }
+
+  /// Attaches image URLs to a list of reports
+  Future<void> _attachImagesToReports(List<Map<String, dynamic>> reports) async {
+    for (final report in reports) {
+      await _attachImagesToReport(report);
+    }
+  }
+
   Future<List<Map<String, dynamic>>> fetchReports() async {
     try {
       // Use RPC to get location as text (ST_AsText converts WKB to readable format)
       final response = await _supabase.rpc('get_reports_with_location');
       final reports = List<Map<String, dynamic>>.from(response);
 
-      // Fetch images for all reports and attach to each report
-      for (final report in reports) {
-        final reportId = report['id'] as String?;
-        if (reportId != null) {
-          try {
-            final images = await _supabase
-                .from('report_images')
-                .select('storage_path, is_primary')
-                .eq('report_id', reportId)
-                .order('is_primary', ascending: false);
-
-            final imageUrls = (images as List)
-                .map((img) => img['storage_path'] as String?)
-                .where((url) => url != null)
-                .cast<String>()
-                .toList();
-
-            report['image_urls'] = imageUrls;
-          } catch (_) {
-            report['image_urls'] = <String>[];
-          }
-        }
-      }
+      await _attachImagesToReports(reports);
 
       return reports;
     } catch (e) {
@@ -69,29 +76,7 @@ class ReportDataSource {
 
       final reports = List<Map<String, dynamic>>.from(response);
 
-      // Fetch images for all reports and attach to each report
-      for (final report in reports) {
-        final reportId = report['id'] as String?;
-        if (reportId != null) {
-          try {
-            final images = await _supabase
-                .from('report_images')
-                .select('storage_path, is_primary')
-                .eq('report_id', reportId)
-                .order('is_primary', ascending: false);
-
-            final imageUrls = (images as List)
-                .map((img) => img['storage_path'] as String?)
-                .where((url) => url != null)
-                .cast<String>()
-                .toList();
-
-            report['image_urls'] = imageUrls;
-          } catch (_) {
-            report['image_urls'] = <String>[];
-          }
-        }
-      }
+      await _attachImagesToReports(reports);
 
       return reports;
     } catch (e) {

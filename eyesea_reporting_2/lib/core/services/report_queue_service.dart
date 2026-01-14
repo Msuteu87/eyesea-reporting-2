@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'package:flutter/foundation.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
@@ -9,7 +8,9 @@ import 'package:uuid/uuid.dart';
 import '../../domain/entities/pending_report.dart';
 import '../../domain/entities/report.dart';
 import '../../data/datasources/report_data_source.dart';
+import '../utils/logger.dart';
 import 'connectivity_service.dart';
+import 'secure_storage_service.dart';
 
 /// Service to manage offline report queue.
 /// Stores reports locally in Hive and syncs to Supabase when online.
@@ -46,14 +47,32 @@ class ReportQueueService {
       Hive.registerAdapter(PendingReportAdapter());
     }
 
-    _box = await Hive.openBox<PendingReport>(_boxName);
-    debugPrint('📦 Report queue initialized with ${_box!.length} items');
+    // Get or create encryption key from secure storage
+    final encryptionKey = await SecureStorageService.getOrCreateHiveKey();
+
+    try {
+      // Try to open encrypted box
+      _box = await Hive.openBox<PendingReport>(
+        _boxName,
+        encryptionCipher: HiveAesCipher(encryptionKey),
+      );
+    } catch (e) {
+      // If box was previously unencrypted, delete and recreate
+      AppLogger.warning('Migrating to encrypted storage, clearing old data');
+      await Hive.deleteBoxFromDisk(_boxName);
+      _box = await Hive.openBox<PendingReport>(
+        _boxName,
+        encryptionCipher: HiveAesCipher(encryptionKey),
+      );
+    }
+
+    AppLogger.info('Report queue initialized with ${_box!.length} items');
 
     // Listen for connectivity changes
     _connectivitySubscription =
         _connectivityService.onConnectivityChanged.listen((isOnline) {
       if (isOnline) {
-        debugPrint('📶 Back online - triggering sync');
+        AppLogger.info('Back online - triggering sync');
         syncPendingReports();
       }
     });
@@ -122,9 +141,9 @@ class ReportQueueService {
     );
 
     await _box!.put(report.id, report);
-    debugPrint('📥 Added report to queue: ${report.id}');
-    debugPrint('   XP: ${report.xpEarned}, Weight: ${report.totalWeightKg}kg');
-    debugPrint('   Flagged: ${report.isFlagged}, Fraud score: ${report.fraudScore}');
+    AppLogger.info('Added report to queue: ${report.id}');
+    AppLogger.debug('XP: ${report.xpEarned}, Weight: ${report.totalWeightKg}kg');
+    AppLogger.debug('Flagged: ${report.isFlagged}, Fraud score: ${report.fraudScore}');
     _notifyPendingCount();
 
     // Try to sync immediately if online
@@ -148,7 +167,7 @@ class ReportQueueService {
     if (_isSyncing || _box == null) return;
     _isSyncing = true;
 
-    debugPrint('🔄 Starting sync of $pendingCount pending reports');
+    AppLogger.info('Starting sync of $pendingCount pending reports');
 
     // Best practice: Use currentSession + refreshSession to validate auth
     // Supabase Flutter client persists session locally and handles refresh
@@ -158,7 +177,7 @@ class ReportQueueService {
       if (session == null) {
         // No valid session - user needs to re-authenticate
         // DON'T sign out automatically, just pause sync
-        debugPrint('⏸️ No valid session. Reports preserved for after login.');
+        AppLogger.info('No valid session. Reports preserved for after login.');
         _isSyncing = false;
         _authRequiredForSync = true; // Flag for UI to show re-auth prompt
         return;
@@ -168,33 +187,32 @@ class ReportQueueService {
       final expiresAt =
           DateTime.fromMillisecondsSinceEpoch(session.expiresAt! * 1000);
       if (expiresAt.isBefore(DateTime.now().add(const Duration(minutes: 5)))) {
-        debugPrint('🔑 Token expiring soon, attempting refresh...');
+        AppLogger.info('Token expiring soon, attempting refresh...');
         final refreshResponse =
             await Supabase.instance.client.auth.refreshSession();
         if (refreshResponse.session == null) {
-          debugPrint(
-              '⏸️ Token refresh returned no session. Reports preserved.');
+          AppLogger.info('Token refresh returned no session. Reports preserved.');
           _isSyncing = false;
           _authRequiredForSync = true;
           return;
         }
-        debugPrint('🔑 Token refreshed successfully');
+        AppLogger.info('Token refreshed successfully');
       }
 
-      debugPrint('🔑 Session valid, proceeding with sync');
+      AppLogger.debug('Session valid, proceeding with sync');
       _authRequiredForSync = false;
     } catch (e) {
       // Token refresh failed - could be network error or truly expired
       // DON'T sign out, preserve reports
-      debugPrint('⚠️ Session check failed: $e');
-      debugPrint('⏸️ Reports preserved - will retry when back online');
+      AppLogger.warning('Session check failed: $e');
+      AppLogger.info('Reports preserved - will retry when back online');
       _isSyncing = false;
       return;
     }
 
     final user = Supabase.instance.client.auth.currentUser;
     if (user == null) {
-      debugPrint('⏸️ Sync paused - no user. Reports preserved.');
+      AppLogger.info('Sync paused - no user. Reports preserved.');
       _isSyncing = false;
       return;
     }
@@ -204,7 +222,7 @@ class ReportQueueService {
     for (final report in pending) {
       if (report.syncStatus == SyncStatus.syncing) continue;
       if (report.retryCount >= _maxRetries) {
-        debugPrint('⚠️ Report ${report.id} exceeded max retries, skipping');
+        AppLogger.warning('Report ${report.id} exceeded max retries, skipping');
         continue;
       }
 
@@ -271,24 +289,24 @@ class ReportQueueService {
         try {
           if (imageFile.existsSync()) {
             imageFile.deleteSync();
-            debugPrint('🗑️ Deleted local image: ${report.imagePath}');
+            AppLogger.debug('Deleted local image: ${report.imagePath}');
           }
         } catch (e) {
-          debugPrint('⚠️ Failed to delete local image: $e');
+          AppLogger.warning('Failed to delete local image: $e');
         }
 
-        debugPrint('✅ Synced report ${report.id} (+${report.xpEarned} XP)');
+        AppLogger.info('Synced report ${report.id} (+${report.xpEarned} XP)');
       } on AuthException catch (e) {
         // Auth errors shouldn't count as retries - user just needs to re-login
-        debugPrint('🔐 Auth error for report ${report.id}: $e');
-        debugPrint('⏸️ Report preserved - will sync after re-login');
+        AppLogger.warning('Auth error for report ${report.id}: $e');
+        AppLogger.info('Report preserved - will sync after re-login');
         report.syncStatus = SyncStatus.pending; // Reset to pending, not failed
         report.errorMessage = 'Please log in to sync';
         await report.save();
         // Stop trying to sync more - user needs to re-authenticate
         break;
       } catch (e) {
-        debugPrint('❌ Failed to sync report ${report.id}: $e');
+        AppLogger.error('Failed to sync report ${report.id}: $e');
         report.syncStatus = SyncStatus.failed;
         report.retryCount++;
         report.errorMessage = e.toString();
@@ -298,7 +316,7 @@ class ReportQueueService {
 
     _isSyncing = false;
     _notifyPendingCount();
-    debugPrint('🔄 Sync complete. $pendingCount reports still pending');
+    AppLogger.info('Sync complete. $pendingCount reports still pending');
   }
 
   /// Remove a report from the queue

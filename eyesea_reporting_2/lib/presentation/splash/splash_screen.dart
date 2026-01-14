@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import '../../core/theme/app_colors.dart';
 
 /// Animated splash screen with ocean waves, logo reveal, and smooth transitions.
@@ -100,9 +101,9 @@ class _SplashScreenState extends State<SplashScreen>
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   // Logo
-                  Image.asset(
-                    'assets/images/logo_white.png',
-                    height: 180,
+                  SvgPicture.asset(
+                    'assets/images/logo_white.svg',
+                    height: 220,
                     fit: BoxFit.contain,
                   )
                       .animate()

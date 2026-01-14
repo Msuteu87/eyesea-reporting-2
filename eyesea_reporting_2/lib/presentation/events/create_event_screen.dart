@@ -177,7 +177,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
         SnackBar(
           content: Text('Failed to create event: ${e.toString()}'),
           backgroundColor: Colors.red,
-          duration: Duration(seconds: 3),
+          duration: const Duration(seconds: 3),
         ),
       );
     } finally {
@@ -355,7 +355,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                           final result = _locationResults[index];
                           return ListTile(
                             dense: true,
-                            leading: Icon(
+                            leading: const Icon(
                               LucideIcons.mapPin,
                               size: 18,
                               color: AppColors.oceanBlue,

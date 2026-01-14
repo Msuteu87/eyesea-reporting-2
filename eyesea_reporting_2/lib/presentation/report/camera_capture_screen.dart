@@ -8,6 +8,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:photo_manager/photo_manager.dart';
 import '../../core/services/image_compression_service.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/utils/logger.dart';
 
 /// Full-screen camera capture with gallery carousel.
 /// Returns the captured/selected image file on success.
@@ -58,12 +59,12 @@ class _CameraCaptureScreenState extends State<CameraCaptureScreen>
 
   Future<void> _initializeCamera() async {
     try {
-      debugPrint('🎥 Getting available cameras...');
+      AppLogger.debug('Getting available cameras...');
       _cameras = await availableCameras();
-      debugPrint('🎥 Found ${_cameras.length} cameras');
+      AppLogger.debug('Found ${_cameras.length} cameras');
 
       if (_cameras.isEmpty) {
-        debugPrint('🎥 No cameras found!');
+        AppLogger.warning('No cameras found!');
         return;
       }
 
@@ -72,7 +73,7 @@ class _CameraCaptureScreenState extends State<CameraCaptureScreen>
         (c) => c.lensDirection == CameraLensDirection.back,
         orElse: () => _cameras.first,
       );
-      debugPrint('🎥 Using camera: ${backCamera.name}');
+      AppLogger.debug('Using camera: ${backCamera.name}');
 
       _controller = CameraController(
         backCamera,
@@ -81,16 +82,16 @@ class _CameraCaptureScreenState extends State<CameraCaptureScreen>
         imageFormatGroup: ImageFormatGroup.jpeg,
       );
 
-      debugPrint('🎥 Initializing camera controller...');
+      AppLogger.debug('Initializing camera controller...');
       await _controller!.initialize();
-      debugPrint('🎥 Camera initialized successfully!');
+      AppLogger.info('Camera initialized successfully!');
 
       if (mounted) {
         setState(() => _isInitialized = true);
-        debugPrint('🎥 State updated - isInitialized: true');
+        AppLogger.debug('State updated - isInitialized: true');
       }
     } catch (e) {
-      debugPrint('🎥 Camera init error: $e');
+      AppLogger.error('Camera init error: $e');
     }
   }
 
@@ -118,7 +119,7 @@ class _CameraCaptureScreenState extends State<CameraCaptureScreen>
         }
       }
     } catch (e) {
-      debugPrint('Gallery load error: $e');
+      AppLogger.error('Gallery load error: $e');
     }
   }
 
@@ -139,7 +140,7 @@ class _CameraCaptureScreenState extends State<CameraCaptureScreen>
       // Compress and navigate to report details
       await _compressAndNavigate(file);
     } catch (e) {
-      debugPrint('Capture error: $e');
+      AppLogger.error('Capture error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed to capture: $e')),
@@ -165,7 +166,7 @@ class _CameraCaptureScreenState extends State<CameraCaptureScreen>
 
   Future<void> _compressAndNavigate(File originalFile) async {
     try {
-      debugPrint('🗜️ Compressing image...');
+      AppLogger.debug('Compressing image...');
       final compressedFile = await ImageCompressionService.compressImage(
         originalFile,
         quality: 80,
@@ -177,8 +178,7 @@ class _CameraCaptureScreenState extends State<CameraCaptureScreen>
       final compressedSize = await compressedFile.length();
       final reduction =
           ((1 - compressedSize / originalSize) * 100).toStringAsFixed(1);
-      debugPrint(
-          '🗜️ Compressed: ${originalSize ~/ 1024}KB → ${compressedSize ~/ 1024}KB ($reduction% reduction)');
+      AppLogger.info('Compressed: ${originalSize ~/ 1024}KB -> ${compressedSize ~/ 1024}KB ($reduction% reduction)');
 
       // Wait for animation
       await Future.delayed(const Duration(milliseconds: 600));
@@ -189,7 +189,7 @@ class _CameraCaptureScreenState extends State<CameraCaptureScreen>
             '/report-details?imagePath=${Uri.encodeComponent(compressedFile.path)}');
       }
     } catch (e) {
-      debugPrint('Compression error: $e');
+      AppLogger.error('Compression error: $e');
       if (mounted) {
         // Fall back to original file if compression fails
         context.push(

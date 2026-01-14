@@ -67,3 +67,12 @@ coverage/
 
 # Secrets
 lib/core/secrets.dart
+
+# Android secrets
+android/gradle.properties
+android/key.properties
+*.jks
+*.keystore
+
+# iOS secrets
+ios/Flutter/Secrets.xcconfig

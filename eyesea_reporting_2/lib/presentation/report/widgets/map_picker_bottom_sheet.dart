@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/utils/logger.dart';
 
 /// A bottom sheet widget that displays a Mapbox map for adjusting GPS location.
 /// User can drag the map to reposition the pin, then confirm to save.
@@ -218,18 +219,26 @@ class _MapPickerBottomSheetState extends State<MapPickerBottomSheet> {
   void _onMapCreated(MapboxMap controller) async {
     _mapController = controller;
 
-    // Enable all gestures for dragging
-    await controller.gestures.updateSettings(
-      GesturesSettings(
-        scrollEnabled: true,
-        rotateEnabled: true,
-        pinchToZoomEnabled: true,
-        doubleTapToZoomInEnabled: true,
-        doubleTouchToZoomOutEnabled: true,
-        pitchEnabled: false, // Keep map flat
-        scrollMode: ScrollMode.HORIZONTAL_AND_VERTICAL,
-      ),
-    );
+    try {
+      AppLogger.debug('MapPicker: Map created, enabling gestures...');
+
+      // Enable all gestures for dragging
+      await controller.gestures.updateSettings(
+        GesturesSettings(
+          scrollEnabled: true,
+          rotateEnabled: true,
+          pinchToZoomEnabled: true,
+          doubleTapToZoomInEnabled: true,
+          doubleTouchToZoomOutEnabled: true,
+          pitchEnabled: false, // Keep map flat
+          scrollMode: ScrollMode.HORIZONTAL_AND_VERTICAL,
+        ),
+      );
+
+      AppLogger.debug('MapPicker: Gestures enabled successfully');
+    } catch (e) {
+      AppLogger.error('MapPicker: Error setting up map', e);
+    }
   }
 
   void _onCameraChanged(CameraChangedEventData event) async {

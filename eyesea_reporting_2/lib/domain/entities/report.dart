@@ -1,5 +1,5 @@
-import 'package:flutter/foundation.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
+import '../../core/utils/logger.dart';
 
 enum PollutionType {
   plastic,
@@ -83,8 +83,8 @@ class ReportEntity {
     Point location;
     final locationData = json['location'];
 
-    debugPrint(
-        '📍 Parsing location: $locationData (type: ${locationData.runtimeType})');
+    AppLogger.debug(
+        'Parsing location: $locationData (type: ${locationData.runtimeType})');
 
     if (locationData is String) {
       if (locationData.startsWith('POINT')) {
@@ -103,10 +103,10 @@ class ReportEntity {
         // Hex-encoded WKB - need to extract coordinates differently
         // This is PostGIS binary format, we can't easily parse it
         // Fallback to 0,0 - we need to fix the query to return as text
-        debugPrint('⚠️ Location is WKB hex format - need ST_AsText in query');
+        AppLogger.warning('Location is WKB hex format - need ST_AsText in query');
         location = Point(coordinates: Position(0, 0));
       } else {
-        debugPrint('⚠️ Unknown location string format');
+        AppLogger.warning('Unknown location string format');
         location = Point(coordinates: Position(0, 0));
       }
     } else if (locationData is Map && locationData['coordinates'] != null) {
@@ -120,7 +120,7 @@ class ReportEntity {
       );
     } else {
       // Fallback to 0,0 if location parsing fails
-      debugPrint('⚠️ Location data is null or unknown type');
+      AppLogger.warning('Location data is null or unknown type');
       location = Point(coordinates: Position(0, 0));
     }
 
@@ -202,8 +202,8 @@ class ReportEntity {
         pollutionCountsMap[type] = count;
       }
     }
-    debugPrint(
-        '📍 fromJson: id=${json['id']}, weight=${json['total_weight_kg']}, counts=$pollutionCountsMap');
+    AppLogger.debug(
+        'fromJson: id=${json['id']}, weight=${json['total_weight_kg']}, counts=$pollutionCountsMap');
 
     return ReportEntity(
       id: json['id'] as String,

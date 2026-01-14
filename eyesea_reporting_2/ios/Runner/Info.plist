@@ -63,6 +63,6 @@
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>MBXAccessToken</key>
-	<string>pk.eyJ1IjoibXN1dGV1IiwiYSI6ImNtNzM0dDBkczA2ZzYya3BrZ3BxYWNreTgifQ.FsItpMoNlqDQymznw00lSw</string>
+	<string>$(MAPBOX_ACCESS_TOKEN)</string>
 </dict>
 </plist>

@@ -6,7 +6,9 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/services/notification_service.dart';
+import '../../core/utils/logger.dart';
 import '../providers/auth_provider.dart';
+import '../providers/reports_map_provider.dart';
 import '../legal/legal_viewer_screen.dart';
 import '../widgets/onboarding_animations.dart';
 import 'registration_screen.dart';
@@ -32,6 +34,10 @@ class _OnboardingScreenState extends State<OnboardingScreen>
 
   // Track granted permissions for success animation
   final Map<Permission, bool> _permissionGrantedStates = {};
+
+  // Track which permission pages have been shown to the user at least once
+  // This prevents auto-advancing on first visit due to false positive permission status
+  final Set<int> _shownPermissionPages = {};
 
   // Prevent duplicate navigation calls (race condition lock)
   bool _isNavigating = false;
@@ -108,7 +114,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      debugPrint('[Onboarding] App resumed. Checking permission...');
+      AppLogger.info('[Onboarding] App resumed. Checking permission...');
       Future.delayed(const Duration(milliseconds: 500), () {
         if (mounted) {
           _checkCurrentPagePermission();
@@ -120,7 +126,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   Future<void> _checkCurrentPagePermission() async {
     // Don't check if already navigating
     if (_isNavigating) {
-      debugPrint('[Onboarding] Skipping resume check - already navigating');
+      AppLogger.debug('[Onboarding] Skipping resume check - already navigating');
       return;
     }
 
@@ -131,11 +137,9 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     if (pageData.isNotificationPage) {
       final notificationService = context.read<NotificationService>();
       final granted = await notificationService.checkPermission();
-      debugPrint('[Onboarding] Resume check: notification = $granted');
+      AppLogger.debug('[Onboarding] Resume check: notification = $granted');
 
-      if (granted &&
-          _currentPage == pageIndexWhenCalled &&
-          !_isNavigating) {
+      if (granted && _currentPage == pageIndexWhenCalled && !_isNavigating) {
         setState(() {
           _permissionGrantedStates[Permission.notification] = true;
         });
@@ -147,14 +151,19 @@ class _OnboardingScreenState extends State<OnboardingScreen>
 
     if (pageData.permission != null) {
       final status = await pageData.permission!.status;
-      debugPrint('[Onboarding] Resume check: ${pageData.permission} = $status');
+      AppLogger.debug('[Onboarding] Resume check: ${pageData.permission} = $status');
 
-      // Only advance if still on the same page (prevents loop if user navigated already)
-      if (status.isGranted &&
+      // ONLY auto-advance if:
+      // 1. Permission is actually granted/limited
+      // 2. User has already seen this page (returned from Settings)
+      // This prevents false-positive auto-skipping on first visit
+      final hasBeenShown = _shownPermissionPages.contains(_currentPage);
+
+      if ((status.isGranted || status.isLimited) &&
           _currentPage == pageIndexWhenCalled &&
-          !_isNavigating) {
-        debugPrint(
-            '[Onboarding] Permission granted on resume. Advancing from page $pageIndexWhenCalled.');
+          !_isNavigating &&
+          hasBeenShown) {
+        AppLogger.info('[Onboarding] Permission granted on resume. Advancing from page $pageIndexWhenCalled.');
         // Mark as granted for animation
         setState(() {
           _permissionGrantedStates[pageData.permission!] = true;
@@ -165,18 +174,26 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     }
   }
 
-  /// Verify all required permissions are granted before completing onboarding
-  Future<bool> _verifyAllPermissions() async {
+  /// Get list of missing permissions
+  Future<List<Permission>> _getMissingPermissions() async {
+    final missing = <Permission>[];
+
     final cameraStatus = await Permission.camera.status;
+    if (!cameraStatus.isGranted) {
+      missing.add(Permission.camera);
+    }
+
     final locationStatus = await Permission.location.status;
+    if (!locationStatus.isGranted) {
+      missing.add(Permission.location);
+    }
+
     final photosStatus = await Permission.photos.status;
+    if (!photosStatus.isGranted && !photosStatus.isLimited) {
+      missing.add(Permission.photos);
+    }
 
-    debugPrint(
-        '[Onboarding] Final check: Camera=$cameraStatus, Location=$locationStatus, Photos=$photosStatus');
-
-    return cameraStatus.isGranted &&
-        locationStatus.isGranted &&
-        photosStatus.isGranted;
+    return missing;
   }
 
   @override
@@ -443,16 +460,50 @@ class _OnboardingScreenState extends State<OnboardingScreen>
 
     // --- T&C Page: Verify all permissions before completing ---
     if (pageData.isTermsPage) {
-      final allGranted = await _verifyAllPermissions();
-      if (!allGranted) {
+      final missingPermissions = await _getMissingPermissions();
+      if (missingPermissions.isNotEmpty) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                  'Please enable Camera, Location, and Photos to continue.'),
-              backgroundColor: Colors.redAccent,
+          // Show dialog explaining which permissions are missing
+          final shouldOpenSettings = await showDialog<bool>(
+            context: context,
+            barrierDismissible: false,
+            builder: (ctx) => AlertDialog(
+              title: const Text('Permissions Required'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                      'Please enable the following permissions to continue:'),
+                  const SizedBox(height: 12),
+                  ...missingPermissions.map((p) => Padding(
+                        padding: const EdgeInsets.only(left: 8, bottom: 4),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.close, color: Colors.red, size: 16),
+                            const SizedBox(width: 8),
+                            Text(_getPermissionName(p)),
+                          ],
+                        ),
+                      )),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: const Text('Open Settings'),
+                ),
+              ],
             ),
           );
+
+          if (shouldOpenSettings == true) {
+            await openAppSettings();
+          }
         }
         return;
       }
@@ -463,6 +514,9 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       await context.read<AuthProvider>().setOnboardingComplete();
 
       if (mounted && context.read<AuthProvider>().isOnboardingComplete) {
+        // Force refresh the map provider to ensure fresh state after permissions
+        AppLogger.info('[Onboarding] Refreshing ReportsMapProvider before navigation...');
+        context.read<ReportsMapProvider>().refresh();
         context.go('/');
       }
       return;
@@ -473,7 +527,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       final notificationService = context.read<NotificationService>();
       final granted = await notificationService.requestPermission();
 
-      debugPrint('[Onboarding] Notification permission: $granted');
+      AppLogger.info('[Onboarding] Notification permission: $granted');
 
       // Mark as granted for animation (notifications are optional, so we proceed either way)
       setState(() {
@@ -487,16 +541,17 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     }
 
     // --- Permission Pages ---
-    if (pageData.permission != null && !pageData.isNotificationPage && !kIsWeb) {
+    if (pageData.permission != null &&
+        !pageData.isNotificationPage &&
+        !kIsWeb) {
       final permission = pageData.permission!;
       final attempts = _permissionAttempts[permission] ?? 0;
 
       // 1. Check current status
       var status = await permission.status;
-      debugPrint(
-          '[Onboarding] $permission status: $status (attempt $attempts)');
+      AppLogger.debug('[Onboarding] $permission status: $status (attempt $attempts)');
 
-      if (status.isGranted) {
+      if (status.isGranted || status.isLimited) {
         // Trigger success animation
         setState(() {
           _permissionGrantedStates[permission] = true;
@@ -509,11 +564,13 @@ class _OnboardingScreenState extends State<OnboardingScreen>
 
       // 2. First attempt: Request permission (shows system dialog if never asked)
       if (attempts == 0) {
+        // Mark page as shown so auto-advance works when returning from Settings
+        _shownPermissionPages.add(_currentPage);
         status = await permission.request();
         _permissionAttempts[permission] = 1;
-        debugPrint('[Onboarding] $permission after request: $status');
+        AppLogger.debug('[Onboarding] $permission after request: $status');
 
-        if (status.isGranted) {
+        if (status.isGranted || status.isLimited) {
           // Trigger success animation
           setState(() {
             _permissionGrantedStates[permission] = true;
@@ -540,6 +597,8 @@ class _OnboardingScreenState extends State<OnboardingScreen>
 
       // 3. Second attempt or permanently denied: Open Settings
       if (attempts >= 1 || status.isPermanentlyDenied) {
+        // Mark page as shown so auto-advance works when returning from Settings
+        _shownPermissionPages.add(_currentPage);
         _permissionAttempts[permission] = attempts + 1;
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -571,15 +630,13 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   void _goToNextPage() {
     // Prevent duplicate navigation calls
     if (_isNavigating) {
-      debugPrint(
-          '[Onboarding] _goToNextPage called but already navigating, skipping');
+      AppLogger.debug('[Onboarding] _goToNextPage called but already navigating, skipping');
       return;
     }
 
     if (_currentPage < _pages.length - 1) {
       _isNavigating = true;
-      debugPrint(
-          '[Onboarding] Navigating from page $_currentPage to ${_currentPage + 1}');
+      AppLogger.debug('[Onboarding] Navigating from page $_currentPage to ${_currentPage + 1}');
 
       _pageController
           .nextPage(
@@ -589,8 +646,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
           .then((_) {
         // Release lock after animation completes
         _isNavigating = false;
-        debugPrint(
-            '[Onboarding] Navigation complete, now on page $_currentPage');
+        AppLogger.debug('[Onboarding] Navigation complete, now on page $_currentPage');
       });
     }
   }

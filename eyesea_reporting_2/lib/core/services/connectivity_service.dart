@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:flutter/foundation.dart';
+import '../utils/logger.dart';
 
 /// Service to monitor network connectivity status.
 /// Triggers callbacks when connectivity changes.
@@ -35,8 +35,7 @@ class ConnectivityService {
         !results.every((r) => r == ConnectivityResult.none);
 
     if (wasOnline != _isOnline) {
-      debugPrint(
-          '📶 Connectivity changed: ${_isOnline ? "ONLINE" : "OFFLINE"}');
+      AppLogger.info('Connectivity changed: ${_isOnline ? "ONLINE" : "OFFLINE"}');
       _controller.add(_isOnline);
     }
   }

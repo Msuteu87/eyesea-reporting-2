@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/utils/logger.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:provider/provider.dart';
 import '../../../core/services/geocoding_service.dart';
@@ -59,7 +60,7 @@ class _MapSearchBarState extends State<MapSearchBar> {
         });
       }
     } catch (e) {
-      debugPrint('Search error: $e');
+      AppLogger.error('Search error: $e');
       if (mounted) {
         setState(() {
           _searchResults = [];

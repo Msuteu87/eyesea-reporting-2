@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import '../../core/services/connectivity_service.dart';
 import '../../core/services/report_queue_service.dart';
+import '../../core/utils/logger.dart';
 import '../../data/datasources/report_data_source.dart';
 import '../../domain/entities/pending_report.dart';
 import '../../domain/entities/report.dart';
@@ -21,6 +22,8 @@ class MapMarkerData {
   final int totalItems;
   final Map<PollutionType, int> pollutionCounts;
   final ReportStatus status; // For marker color: resolved = green
+  final String? city;
+  final String? country;
 
   MapMarkerData({
     required this.id,
@@ -36,6 +39,8 @@ class MapMarkerData {
     this.totalItems = 0,
     this.pollutionCounts = const {},
     this.status = ReportStatus.pending,
+    this.city,
+    this.country,
   });
 
   /// Create from a pending (local) report
@@ -51,8 +56,7 @@ class MapMarkerData {
     // Calculate total items
     final totalItems = counts.values.fold(0, (sum, count) => sum + count);
 
-    debugPrint(
-        '📍 fromPending: id=${report.id}, weight=${report.totalWeightKg}, items=$totalItems, counts=$counts');
+    AppLogger.debug('fromPending: id=${report.id}, weight=${report.totalWeightKg}, items=$totalItems, counts=$counts');
 
     return MapMarkerData(
       id: report.id,
@@ -67,6 +71,8 @@ class MapMarkerData {
       totalWeightKg: report.totalWeightKg > 0 ? report.totalWeightKg : null,
       totalItems: totalItems,
       pollutionCounts: counts,
+      city: report.city,
+      country: report.country,
     );
   }
 
@@ -75,8 +81,7 @@ class MapMarkerData {
     final totalItems =
         report.pollutionCounts.values.fold(0, (sum, count) => sum + count);
 
-    debugPrint(
-        '📍 fromEntity: id=${report.id}, weight=${report.totalWeightKg}, items=$totalItems, counts=${report.pollutionCounts}');
+    AppLogger.debug('fromEntity: id=${report.id}, weight=${report.totalWeightKg}, items=$totalItems, counts=${report.pollutionCounts}');
 
     return MapMarkerData(
       id: report.id,
@@ -92,6 +97,8 @@ class MapMarkerData {
       totalItems: totalItems,
       pollutionCounts: report.pollutionCounts,
       status: report.status,
+      city: report.city,
+      country: report.country,
     );
   }
 
@@ -113,6 +120,43 @@ class MapMarkerData {
       default:
         return PollutionType.other;
     }
+  }
+
+  /// Creates a copy of this marker with the given fields replaced
+  MapMarkerData copyWith({
+    String? id,
+    String? userId,
+    double? latitude,
+    double? longitude,
+    PollutionType? pollutionType,
+    int? severity,
+    bool? isPending,
+    DateTime? createdAt,
+    String? imageUrl,
+    double? totalWeightKg,
+    int? totalItems,
+    Map<PollutionType, int>? pollutionCounts,
+    ReportStatus? status,
+    String? city,
+    String? country,
+  }) {
+    return MapMarkerData(
+      id: id ?? this.id,
+      userId: userId ?? this.userId,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
+      pollutionType: pollutionType ?? this.pollutionType,
+      severity: severity ?? this.severity,
+      isPending: isPending ?? this.isPending,
+      createdAt: createdAt ?? this.createdAt,
+      imageUrl: imageUrl ?? this.imageUrl,
+      totalWeightKg: totalWeightKg ?? this.totalWeightKg,
+      totalItems: totalItems ?? this.totalItems,
+      pollutionCounts: pollutionCounts ?? this.pollutionCounts,
+      status: status ?? this.status,
+      city: city ?? this.city,
+      country: country ?? this.country,
+    );
   }
 }
 
@@ -136,11 +180,18 @@ class ReportsMapProvider extends ChangeNotifier {
     ReportStatus.resolved,
   };
 
-  /// Filter to show only current user's reports (default: true for performance)
-  bool _showOnlyMyReports = true;
+  /// Filter to show only current user's reports (default: false to show all reports)
+  bool _showOnlyMyReports = false;
 
   /// Current user ID for filtering "My Reports"
   String? _currentUserId;
+
+  // Cached filtered markers for performance
+  List<MapMarkerData>? _cachedFilteredMarkers;
+  Set<ReportStatus>? _lastFilteredStatuses;
+  bool? _lastShowOnlyMyReports;
+  String? _lastFilteredUserId;
+  int _lastMarkersLength = 0;
 
   ReportsMapProvider(
     this._dataSource,
@@ -164,8 +215,22 @@ class ReportsMapProvider extends ChangeNotifier {
     loadMarkers();
   }
 
-  /// Get markers filtered by visible statuses and optionally by user
+  /// Get markers filtered by visible statuses and optionally by user.
+  /// Results are cached and only recomputed when filter parameters change.
   List<MapMarkerData> get filteredMarkers {
+    // Check if cache is valid
+    final cacheValid = _cachedFilteredMarkers != null &&
+        _lastFilteredStatuses != null &&
+        _setEquals(_lastFilteredStatuses!, _visibleStatuses) &&
+        _lastShowOnlyMyReports == _showOnlyMyReports &&
+        _lastFilteredUserId == _currentUserId &&
+        _lastMarkersLength == _markers.length;
+
+    if (cacheValid) {
+      return _cachedFilteredMarkers!;
+    }
+
+    // Recompute filtered markers
     var filtered = _markers.where((m) => _visibleStatuses.contains(m.status));
 
     // If showOnlyMyReports is enabled and we have a user ID, filter by user
@@ -173,25 +238,45 @@ class ReportsMapProvider extends ChangeNotifier {
       filtered = filtered.where((m) => m.userId == _currentUserId);
     }
 
-    return filtered.toList();
+    // Update cache
+    _cachedFilteredMarkers = filtered.toList();
+    _lastFilteredStatuses = Set.from(_visibleStatuses);
+    _lastShowOnlyMyReports = _showOnlyMyReports;
+    _lastFilteredUserId = _currentUserId;
+    _lastMarkersLength = _markers.length;
+
+    return _cachedFilteredMarkers!;
+  }
+
+  /// Helper to compare two sets for equality
+  bool _setEquals<T>(Set<T> a, Set<T> b) {
+    if (a.length != b.length) return false;
+    return a.containsAll(b);
+  }
+
+  /// Invalidates the filtered markers cache
+  void _invalidateFilterCache() {
+    _cachedFilteredMarkers = null;
   }
 
   /// Update the visible status filter
   void setVisibleStatuses(Set<ReportStatus> statuses) {
     _visibleStatuses = statuses;
+    _invalidateFilterCache();
     notifyListeners();
   }
 
   /// Toggle showing only user's reports vs all reports
   void setShowOnlyMyReports(bool value) {
     _showOnlyMyReports = value;
+    _invalidateFilterCache();
     notifyListeners();
   }
 
   void _init() {
     // Listen for pending report changes (new submissions, syncs)
     _queueSubscription = _queueService.pendingCountStream.listen((_) {
-      debugPrint('📍 Pending count changed, reloading markers');
+      AppLogger.info('Pending count changed, reloading markers');
       loadMarkers();
     });
 
@@ -199,7 +284,7 @@ class ReportsMapProvider extends ChangeNotifier {
     _connectivitySubscription =
         _connectivityService.onConnectivityChanged.listen((isOnline) {
       if (isOnline) {
-        debugPrint('📍 Back online, fetching remote reports');
+        AppLogger.info('Back online, fetching remote reports');
         loadMarkers();
       }
     });
@@ -225,7 +310,7 @@ class ReportsMapProvider extends ChangeNotifier {
 
       // 1. Always load pending (local) reports first - works offline
       final pendingReports = _queueService.getPendingReports();
-      debugPrint('📍 Found ${pendingReports.length} pending local reports');
+      AppLogger.info('Found ${pendingReports.length} pending local reports');
 
       for (final pending in pendingReports) {
         if (pending.syncStatus != SyncStatus.synced) {
@@ -262,11 +347,10 @@ class ReportsMapProvider extends ChangeNotifier {
               minLng: minLng,
               maxLng: maxLng,
             );
-            debugPrint('📍 Fetched ${remoteData.length} reports in bounds');
+            AppLogger.info('Fetched ${remoteData.length} reports in bounds');
           } else {
             remoteData = await _dataSource.fetchReports();
-            debugPrint(
-                '📍 Fetched ${remoteData.length} remote reports (no bounds)');
+            AppLogger.info('Fetched ${remoteData.length} remote reports (no bounds)');
           }
 
           for (final json in remoteData) {
@@ -278,21 +362,22 @@ class ReportsMapProvider extends ChangeNotifier {
             }
           }
         } catch (e) {
-          debugPrint('⚠️ Failed to fetch remote reports: $e');
+          AppLogger.warning('Failed to fetch remote reports: $e');
           // Continue with local reports only
         }
       } else {
-        debugPrint('📍 Offline - showing only local pending reports');
+        AppLogger.info('Offline - showing only local pending reports');
       }
 
       // Sort by creation date (newest first)
       combinedMarkers.sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
       _markers = combinedMarkers;
-      debugPrint('📍 Total markers: ${_markers.length}');
+      _invalidateFilterCache();
+      AppLogger.info('Total markers: ${_markers.length}');
     } catch (e) {
       _error = e.toString();
-      debugPrint('❌ Error loading markers: $e');
+      AppLogger.error('Error loading markers: $e');
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -302,6 +387,7 @@ class ReportsMapProvider extends ChangeNotifier {
   /// Force refresh markers (pull-to-refresh or manual)
   Future<void> refresh() async {
     _markers = [];
+    _invalidateFilterCache();
     notifyListeners();
     await loadMarkers();
   }
@@ -313,27 +399,13 @@ class ReportsMapProvider extends ChangeNotifier {
       // Update the local marker status immediately
       final index = _markers.indexWhere((m) => m.id == reportId);
       if (index != -1) {
-        final oldMarker = _markers[index];
-        _markers[index] = MapMarkerData(
-          id: oldMarker.id,
-          userId: oldMarker.userId,
-          latitude: oldMarker.latitude,
-          longitude: oldMarker.longitude,
-          pollutionType: oldMarker.pollutionType,
-          severity: oldMarker.severity,
-          isPending: oldMarker.isPending,
-          createdAt: oldMarker.createdAt,
-          imageUrl: oldMarker.imageUrl,
-          totalWeightKg: oldMarker.totalWeightKg,
-          totalItems: oldMarker.totalItems,
-          pollutionCounts: oldMarker.pollutionCounts,
-          status: ReportStatus.resolved,
-        );
+        _markers[index] = _markers[index].copyWith(status: ReportStatus.resolved);
+        _invalidateFilterCache();
         notifyListeners();
       }
-      debugPrint('✅ Report $reportId marked as recovered');
+      AppLogger.info('Report $reportId marked as recovered');
     } catch (e) {
-      debugPrint('❌ Error marking report as recovered: $e');
+      AppLogger.error('Error marking report as recovered: $e');
       rethrow;
     }
   }

@@ -503,4 +503,67 @@ class PollutionCalculations {
 
     return baseXP;
   }
+
+  /// Maps YOLO-detected object names to PollutionType.
+  /// Must stay in sync with AIAnalysisService._mapAllPollutionTypes().
+  static const Map<String, PollutionType> objectToPollutionType = {
+    // Plastic items (bottles, cups - genuine plastic)
+    'bottle': PollutionType.plastic,
+    'cup': PollutionType.plastic,
+    'toothbrush': PollutionType.plastic,
+
+    // Debris/General waste (glass, ceramic, sports equipment, food, e-waste)
+    'bowl': PollutionType.debris,
+    'vase': PollutionType.debris,
+    'wine glass': PollutionType.debris,
+    'handbag': PollutionType.debris,
+    'backpack': PollutionType.debris,
+    'suitcase': PollutionType.debris,
+    'umbrella': PollutionType.debris,
+
+    // Sports equipment (common beach/outdoor litter)
+    'sports ball': PollutionType.debris,
+    'frisbee': PollutionType.debris,
+    'kite': PollutionType.debris,
+    'surfboard': PollutionType.debris,
+    'skateboard': PollutionType.debris,
+    'tennis racket': PollutionType.debris,
+    'baseball bat': PollutionType.debris,
+    'baseball glove': PollutionType.debris,
+
+    // Food waste
+    'banana': PollutionType.debris,
+    'apple': PollutionType.debris,
+    'orange': PollutionType.debris,
+    'sandwich': PollutionType.debris,
+    'hot dog': PollutionType.debris,
+    'pizza': PollutionType.debris,
+    'donut': PollutionType.debris,
+    'cake': PollutionType.debris,
+    'broccoli': PollutionType.debris,
+    'carrot': PollutionType.debris,
+
+    // E-waste & small items
+    'cell phone': PollutionType.debris,
+    'remote': PollutionType.debris,
+    'book': PollutionType.debris,
+    'tie': PollutionType.debris,
+
+    // Vehicles (dumped/abandoned)
+    'bicycle': PollutionType.debris,
+    'car': PollutionType.debris,
+    'motorcycle': PollutionType.debris,
+
+    // Furniture
+    'bench': PollutionType.debris,
+
+    // Marine equipment
+    'boat': PollutionType.fishingGear,
+  };
+
+  /// Maps a detected item name to its PollutionType.
+  /// Returns null if the item doesn't map to any pollution type.
+  static PollutionType? mapItemToPollutionType(String item) {
+    return objectToPollutionType[item.toLowerCase()];
+  }
 }

@@ -1,7 +1,7 @@
 import 'dart:io';
-import 'package:flutter/foundation.dart';
 import 'package:ultralytics_yolo/ultralytics_yolo.dart';
 import '../../domain/entities/ai_analysis_result.dart';
+import '../utils/logger.dart';
 
 /// Service for on-device AI analysis of images using Ultralytics YOLO.
 /// Uses YOLOv8/v11 for object detection with grouping (pollution vs people).
@@ -99,9 +99,9 @@ class AIAnalysisService {
       );
       await _yolo!.loadModel();
       _isInitialized = true;
-      debugPrint('🤖 YOLO AI Analysis Service initialized successfully');
+      AppLogger.info(' YOLO AI Analysis Service initialized successfully');
     } catch (e) {
-      debugPrint('⚠️ YOLO initialization failed: $e');
+      AppLogger.warning(' YOLO initialization failed: $e');
     }
   }
 
@@ -109,7 +109,7 @@ class AIAnalysisService {
     if (!_isInitialized) {
       await initialize();
       if (!_isInitialized) {
-        debugPrint('⚠️ AI Analysis skipped: YOLO not initialized');
+        AppLogger.warning(' AI Analysis skipped: YOLO not initialized');
         return null;
       }
     }
@@ -117,7 +117,7 @@ class AIAnalysisService {
     try {
       final imageFile = File(imagePath);
       if (!imageFile.existsSync()) {
-        debugPrint('❌ Image file not found: $imagePath');
+        AppLogger.error(' Image file not found: $imagePath');
         return null;
       }
 
@@ -126,7 +126,7 @@ class AIAnalysisService {
       final boxes = results['boxes'] as List<dynamic>? ?? [];
 
       if (boxes.isEmpty) {
-        debugPrint('🤖 YOLO Analysis: No objects detected');
+        AppLogger.info(' YOLO Analysis: No objects detected');
         return const AIAnalysisResult(
           pollutionCounts: {},
           confidence: 0,
@@ -144,7 +144,7 @@ class AIAnalysisService {
         final confidence = (box['confidence'] as num?)?.toDouble() ?? 0;
         final className = (box['class'] as String?)?.toLowerCase() ?? 'unknown';
 
-        debugPrint('🔍 Raw Detection: $className ($confidence)');
+        AppLogger.debug(' Raw Detection: $className ($confidence)');
 
         if (confidence >= _confidenceThreshold) {
           filteredCount++;
@@ -152,16 +152,16 @@ class AIAnalysisService {
 
           if (className == 'person') {
             peopleCount++;
-            debugPrint(
-                '  👤 person: ${(confidence * 100).toStringAsFixed(1)}%');
+            AppLogger.debug(
+                'Person detected: ${(confidence * 100).toStringAsFixed(1)}%');
           } else if (_pollutionClasses.contains(className)) {
             pollutionCounts[className] = (pollutionCounts[className] ?? 0) + 1;
-            debugPrint(
-                '  🗑️ $className: ${(confidence * 100).toStringAsFixed(1)}%');
+            AppLogger.debug(
+                'Pollution $className: ${(confidence * 100).toStringAsFixed(1)}%');
           } else if (!_ignoreClasses.contains(className)) {
             otherCounts[className] = (otherCounts[className] ?? 0) + 1;
-            debugPrint(
-                '  📦 $className: ${(confidence * 100).toStringAsFixed(1)}%');
+            AppLogger.debug(
+                'Other $className: ${(confidence * 100).toStringAsFixed(1)}%');
           }
         }
       }
@@ -202,18 +202,14 @@ class AIAnalysisService {
         userWarning: userWarning,
       );
 
-      debugPrint('');
-      debugPrint('🤖 YOLO Analysis Summary:');
-      debugPrint('   🗑️ Pollution items: $totalPollution $pollutionCounts');
-      debugPrint('   👤 People: $peopleCount');
-      debugPrint('   📦 Other: $otherCounts');
-      debugPrint('   🏷️ Detected types: $detectedTypes');
-      debugPrint('   ⚠️ Warning: ${userWarning ?? "None"}');
-      debugPrint('   🎯 Primary type: ${analysisResult.likelyPollutionType}');
+      AppLogger.info('YOLO Analysis Summary: Pollution=$totalPollution, People=$peopleCount, Types=$detectedTypes');
+      if (userWarning != null) {
+        AppLogger.warning('AI Warning: $userWarning');
+      }
 
       return analysisResult;
     } catch (e) {
-      debugPrint('❌ Error during YOLO analysis: $e');
+      AppLogger.error(' Error during YOLO analysis: $e');
       return null;
     }
   }

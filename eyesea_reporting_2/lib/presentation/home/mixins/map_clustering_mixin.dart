@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/utils/logger.dart';
 import '../../providers/reports_map_provider.dart';
 
 /// Mixin that provides Mapbox clustering functionality for map screens.
@@ -12,14 +13,14 @@ mixin MapClusteringMixin<T extends StatefulWidget> on State<T> {
   /// Set up clustering layers using GeoJSON source
   Future<void> setupClusteringLayers(List<MapMarkerData> markers) async {
     if (mapboxMap == null || !mounted) {
-      debugPrint('📍 Cannot render markers: map not ready');
+      AppLogger.debug('Cannot render markers: map not ready');
       return;
     }
 
-    debugPrint('📍 Setting up clustering for ${markers.length} markers');
+    AppLogger.info('Setting up clustering for ${markers.length} markers');
 
     if (markers.isEmpty) {
-      debugPrint('📍 No markers to display');
+      AppLogger.info('No markers to display');
       return;
     }
 
@@ -112,9 +113,9 @@ mixin MapClusteringMixin<T extends StatefulWidget> on State<T> {
         ),
       );
 
-      debugPrint('📍 Clustering layers set up successfully');
+      AppLogger.info('Clustering layers set up successfully');
     } catch (e) {
-      debugPrint('❌ Error setting up clustering: $e');
+      AppLogger.error('Error setting up clustering: $e');
     }
   }
 
@@ -132,10 +133,13 @@ mixin MapClusteringMixin<T extends StatefulWidget> on State<T> {
         final cluster = features.first;
         final queriedFeature = cluster?.queriedFeature;
         if (queriedFeature == null) return;
-        final feature = queriedFeature.feature as Map<String, dynamic>;
 
-        final geometry = feature['geometry'] as Map<String, dynamic>?;
-        if (geometry == null) return;
+        // Handle Mapbox's CastMap types by converting to standard Map
+        final feature = Map<String, dynamic>.from(queriedFeature.feature);
+
+        final geometryObj = feature['geometry'];
+        if (geometryObj == null) return;
+        final geometry = Map<String, dynamic>.from(geometryObj as Map);
 
         final coords = geometry['coordinates'] as List?;
         if (coords == null || coords.length < 2) return;
@@ -154,10 +158,10 @@ mixin MapClusteringMixin<T extends StatefulWidget> on State<T> {
           MapAnimationOptions(duration: 500),
         );
 
-        debugPrint('📍 Zoomed into cluster at $lat, $lng (zoom: $newZoom)');
+        AppLogger.info('Zoomed into cluster at $lat, $lng (zoom: $newZoom)');
       }
     } catch (e) {
-      debugPrint('⚠️ Error handling cluster tap: $e');
+      AppLogger.warning('Error handling cluster tap: $e');
     }
   }
 
@@ -176,16 +180,17 @@ mixin MapClusteringMixin<T extends StatefulWidget> on State<T> {
         final queriedFeature = marker?.queriedFeature;
         if (queriedFeature == null) return null;
 
-        final featureObj = queriedFeature.feature;
-        if (featureObj is! Map) return null;
+        // Handle Mapbox's CastMap types by converting to standard Map
+        final feature = Map<String, dynamic>.from(queriedFeature.feature);
 
-        final propertiesObj = featureObj['properties'];
-        if (propertiesObj is! Map) return null;
+        final propertiesObj = feature['properties'];
+        if (propertiesObj == null) return null;
+        final properties = Map<String, dynamic>.from(propertiesObj as Map);
 
-        return propertiesObj['id']?.toString();
+        return properties['id']?.toString();
       }
     } catch (e) {
-      debugPrint('⚠️ Error querying markers: $e');
+      AppLogger.warning('Error querying markers: $e');
     }
 
     return null;

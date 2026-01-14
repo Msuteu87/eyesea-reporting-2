@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
 import 'package:wave/config.dart';
 import 'package:wave/wave.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/utils/validators.dart';
 import '../providers/auth_provider.dart';
 
 class SignUpScreen extends StatefulWidget {
@@ -142,11 +144,11 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       ),
 
                       // Logo
-                      Image.asset(
+                      SvgPicture.asset(
                         Theme.of(context).brightness == Brightness.dark
-                            ? 'assets/images/logo_white.png'
-                            : 'assets/images/logo.png',
-                        height: 150,
+                            ? 'assets/images/logo_white.svg'
+                            : 'assets/images/logo.svg',
+                        height: 180,
                         fit: BoxFit.contain,
                       ),
                       const SizedBox(height: spacing),
@@ -202,15 +204,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                                     labelText: 'Email Address',
                                     prefixIcon: Icon(Icons.email_outlined),
                                   ),
-                                  validator: (value) {
-                                    if (value == null || value.isEmpty) {
-                                      return 'Please enter your email';
-                                    }
-                                    if (!value.contains('@')) {
-                                      return 'Please enter a valid email';
-                                    }
-                                    return null;
-                                  },
+                                  validator: Validators.validateEmail,
                                 ),
                                 const SizedBox(height: 16),
                                 TextFormField(
@@ -234,15 +228,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
                                       },
                                     ),
                                   ),
-                                  validator: (value) {
-                                    if (value == null || value.isEmpty) {
-                                      return 'Please enter a password';
-                                    }
-                                    if (value.length < 6) {
-                                      return 'Password must be at least 6 characters';
-                                    }
-                                    return null;
-                                  },
+                                  validator: (value) =>
+                                      Validators.validatePassword(value, minLength: 8),
                                 ),
                                 const SizedBox(height: 16),
                                 TextFormField(
@@ -266,15 +253,8 @@ class _SignUpScreenState extends State<SignUpScreen> {
                                       },
                                     ),
                                   ),
-                                  validator: (value) {
-                                    if (value == null || value.isEmpty) {
-                                      return 'Please confirm your password';
-                                    }
-                                    if (value != _passwordController.text) {
-                                      return 'Passwords do not match';
-                                    }
-                                    return null;
-                                  },
+                                  validator: (value) => Validators.validatePasswordMatch(
+                                      value, _passwordController.text),
                                 ),
                                 const SizedBox(height: 20),
                                 FilledButton(

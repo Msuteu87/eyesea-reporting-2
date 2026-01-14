@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../core/utils/logger.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:go_router/go_router.dart';
@@ -359,7 +360,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                         width: 100,
                         height: 100,
                         errorBuilder: (_, error, stackTrace) {
-                          debugPrint('[Avatar] Image load error: $error');
+                          AppLogger.warning('Avatar image load error: $error');
                           return letterPlaceholder();
                         },
                         loadingBuilder: (context, child, loadingProgress) {

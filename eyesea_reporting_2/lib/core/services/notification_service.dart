@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../utils/logger.dart';
+
 /// Notification model matching the database schema
 class AppNotification {
   final String id;
@@ -36,6 +38,29 @@ class AppNotification {
       data: json['data'] as Map<String, dynamic>?,
       read: json['read'] as bool? ?? false,
       createdAt: DateTime.parse(json['created_at'] as String),
+    );
+  }
+
+  /// Creates a copy of this notification with the given fields replaced
+  AppNotification copyWith({
+    String? id,
+    String? userId,
+    String? type,
+    String? title,
+    String? body,
+    Map<String, dynamic>? data,
+    bool? read,
+    DateTime? createdAt,
+  }) {
+    return AppNotification(
+      id: id ?? this.id,
+      userId: userId ?? this.userId,
+      type: type ?? this.type,
+      title: title ?? this.title,
+      body: body ?? this.body,
+      data: data ?? this.data,
+      read: read ?? this.read,
+      createdAt: createdAt ?? this.createdAt,
     );
   }
 }
@@ -86,7 +111,7 @@ class NotificationService {
 
     final userId = _supabase.auth.currentUser?.id;
     if (userId == null) {
-      debugPrint('🔔 NotificationService: No user logged in, skipping init');
+      AppLogger.info('NotificationService: No user logged in, skipping init');
       return;
     }
 
@@ -121,7 +146,7 @@ class NotificationService {
     );
 
     _localNotificationsInitialized = true;
-    debugPrint('🔔 Local notifications initialized');
+    AppLogger.info('Local notifications initialized');
   }
 
   /// Request notification permission (call from onboarding)
@@ -152,11 +177,10 @@ class NotificationService {
         _hasNotificationPermission = result ?? true; // Android < 13 doesn't need permission
       }
 
-      debugPrint(
-          '🔔 Notification permission: $_hasNotificationPermission');
+      AppLogger.info('Notification permission: $_hasNotificationPermission');
       return _hasNotificationPermission;
     } catch (e) {
-      debugPrint('🔔 Error requesting notification permission: $e');
+      AppLogger.error('Error requesting notification permission: $e');
       _hasNotificationPermission = false;
       return false;
     }
@@ -182,14 +206,14 @@ class NotificationService {
       }
       return _hasNotificationPermission;
     } catch (e) {
-      debugPrint('🔔 Error checking notification permission: $e');
+      AppLogger.error('Error checking notification permission: $e');
       return false;
     }
   }
 
   /// Handle notification tap
   void _onNotificationTapped(NotificationResponse response) {
-    debugPrint('🔔 Notification tapped: ${response.payload}');
+    AppLogger.info('Notification tapped: ${response.payload}');
     // Could navigate to specific screen based on payload
   }
 
@@ -199,7 +223,7 @@ class NotificationService {
       // Check permission status
       await checkPermission();
       if (!_hasNotificationPermission) {
-        debugPrint('🔔 Skipping local notification - no permission');
+        AppLogger.debug('Skipping local notification - no permission');
         return;
       }
     }
@@ -235,7 +259,7 @@ class NotificationService {
       payload: notification.id,
     );
 
-    debugPrint('🔔 Local notification shown: ${notification.title}');
+    AppLogger.info('Local notification shown: ${notification.title}');
   }
 
   /// Load existing notifications from database
@@ -254,10 +278,9 @@ class NotificationService {
       _unreadCount = _notifications.where((n) => !n.read).length;
       _notificationsController.add(_notifications);
 
-      debugPrint(
-          '🔔 Loaded ${_notifications.length} notifications ($unreadCount unread)');
+      AppLogger.info('Loaded ${_notifications.length} notifications ($unreadCount unread)');
     } catch (e) {
-      debugPrint('🔔 Error loading notifications: $e');
+      AppLogger.error('Error loading notifications: $e');
     }
   }
 
@@ -275,13 +298,13 @@ class NotificationService {
             value: userId,
           ),
           callback: (payload) {
-            debugPrint('🔔 New notification received: ${payload.newRecord}');
+            AppLogger.info('New notification received: ${payload.newRecord}');
             _handleNewNotification(payload.newRecord);
           },
         )
         .subscribe();
 
-    debugPrint('🔔 Subscribed to realtime notifications');
+    AppLogger.info('Subscribed to realtime notifications');
   }
 
   /// Handle a new notification from realtime
@@ -300,9 +323,9 @@ class NotificationService {
       // Show native local notification
       _showLocalNotification(notification);
 
-      debugPrint('🔔 Notification added: ${notification.title}');
+      AppLogger.info('Notification added: ${notification.title}');
     } catch (e) {
-      debugPrint('🔔 Error parsing notification: $e');
+      AppLogger.error('Error parsing notification: $e');
     }
   }
 
@@ -316,21 +339,12 @@ class NotificationService {
       // Update local state
       final index = _notifications.indexWhere((n) => n.id == notificationId);
       if (index != -1 && !_notifications[index].read) {
-        _notifications[index] = AppNotification(
-          id: _notifications[index].id,
-          userId: _notifications[index].userId,
-          type: _notifications[index].type,
-          title: _notifications[index].title,
-          body: _notifications[index].body,
-          data: _notifications[index].data,
-          read: true,
-          createdAt: _notifications[index].createdAt,
-        );
+        _notifications[index] = _notifications[index].copyWith(read: true);
         _unreadCount--;
         _notificationsController.add(_notifications);
       }
     } catch (e) {
-      debugPrint('🔔 Error marking notification as read: $e');
+      AppLogger.error('Error marking notification as read: $e');
     }
   }
 
@@ -347,26 +361,14 @@ class NotificationService {
           .eq('read', false);
 
       // Update local state
-      _notifications = _notifications.map((n) {
-        if (!n.read) {
-          return AppNotification(
-            id: n.id,
-            userId: n.userId,
-            type: n.type,
-            title: n.title,
-            body: n.body,
-            data: n.data,
-            read: true,
-            createdAt: n.createdAt,
-          );
-        }
-        return n;
-      }).toList();
+      _notifications = _notifications
+          .map((n) => n.read ? n : n.copyWith(read: true))
+          .toList();
 
       _unreadCount = 0;
       _notificationsController.add(_notifications);
     } catch (e) {
-      debugPrint('🔔 Error marking all as read: $e');
+      AppLogger.error('Error marking all as read: $e');
     }
   }
 
