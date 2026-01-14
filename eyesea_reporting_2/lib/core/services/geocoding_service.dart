@@ -1,12 +1,18 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../secrets.dart';
 import '../utils/logger.dart';
 
 /// Service for geocoding locations using Mapbox Geocoding API.
+/// Supports cached geocoding via Supabase Edge Function for better performance.
 class GeocodingService {
   static const String _baseUrl =
       'https://api.mapbox.com/geocoding/v5/mapbox.places';
+
+  /// Whether to prefer the Edge Function for reverse geocoding (cached).
+  /// Falls back to direct Mapbox API if Edge Function fails or is offline.
+  static bool preferCachedGeocode = true;
 
   /// Search for places matching the query.
   /// Returns a list of [GeocodingResult] with place names and coordinates.
@@ -74,7 +80,67 @@ class GeocodingService {
   }
 
   /// Reverse geocode coordinates to get place name.
+  /// Uses Edge Function with caching if [preferCachedGeocode] is true.
+  /// Falls back to direct Mapbox API if Edge Function fails.
   static Future<GeocodingResult?> reverseGeocode(
+    double latitude,
+    double longitude,
+  ) async {
+    // Try cached geocoding first (via Edge Function)
+    if (preferCachedGeocode) {
+      final cached = await _reverseGeocodeCached(latitude, longitude);
+      if (cached != null) return cached;
+      AppLogger.info('[Geocoding] Edge Function unavailable, using direct API');
+    }
+
+    // Fallback to direct Mapbox API
+    return _reverseGeocodeDirectMapbox(latitude, longitude);
+  }
+
+  /// Reverse geocode using Supabase Edge Function (with caching).
+  /// Returns null if Edge Function is unavailable.
+  static Future<GeocodingResult?> _reverseGeocodeCached(
+    double latitude,
+    double longitude,
+  ) async {
+    try {
+      final supabase = Supabase.instance.client;
+
+      final response = await supabase.functions.invoke(
+        'geocode',
+        body: {
+          'lat': latitude,
+          'lng': longitude,
+          'precision': 4, // ~11m accuracy for cache key
+        },
+      );
+
+      if (response.status != 200) {
+        AppLogger.warning('[Geocoding] Edge Function error: ${response.status}');
+        return null;
+      }
+
+      final data = response.data as Map<String, dynamic>;
+      final cached = data['cached'] as bool? ?? false;
+
+      AppLogger.debug('[Geocoding] ${cached ? "Cache HIT" : "Cache MISS"}');
+
+      return GeocodingResult(
+        placeName: data['placeName'] as String? ?? '',
+        fullPlaceName: data['placeName'] as String? ?? '',
+        city: data['city'] as String?,
+        country: data['country'] as String?,
+        latitude: latitude,
+        longitude: longitude,
+      );
+    } catch (e) {
+      AppLogger.warning('[Geocoding] Edge Function exception: $e');
+      return null;
+    }
+  }
+
+  /// Reverse geocode directly via Mapbox API (no caching).
+  static Future<GeocodingResult?> _reverseGeocodeDirectMapbox(
     double latitude,
     double longitude,
   ) async {
@@ -103,9 +169,31 @@ class GeocodingService {
       final geometry = feature['geometry'] as Map<String, dynamic>;
       final coordinates = geometry['coordinates'] as List<dynamic>;
 
+      // Extract city and country from context
+      String? city;
+      String? country;
+      final context = feature['context'] as List<dynamic>? ?? [];
+      for (final ctx in context) {
+        final ctxMap = ctx as Map<String, dynamic>;
+        final id = ctxMap['id'] as String? ?? '';
+        if (id.startsWith('place.') || id.startsWith('locality.')) {
+          city ??= ctxMap['text'] as String?;
+        } else if (id.startsWith('country.')) {
+          country = ctxMap['text'] as String?;
+        }
+      }
+
+      // If feature itself is a place, use it as city
+      final placeType = (feature['place_type'] as List<dynamic>?)?.first as String?;
+      if ((placeType == 'place' || placeType == 'locality') && city == null) {
+        city = feature['text'] as String?;
+      }
+
       return GeocodingResult(
         placeName: feature['text'] as String? ?? '',
         fullPlaceName: feature['place_name'] as String? ?? '',
+        city: city,
+        country: country,
         longitude: (coordinates[0] as num).toDouble(),
         latitude: (coordinates[1] as num).toDouble(),
       );
@@ -124,6 +212,8 @@ class GeocodingResult {
   final double latitude;
   final double longitude;
   final String? placeType;
+  final String? city;
+  final String? country;
 
   const GeocodingResult({
     required this.placeName,
@@ -132,5 +222,7 @@ class GeocodingResult {
     required this.latitude,
     required this.longitude,
     this.placeType,
+    this.city,
+    this.country,
   });
 }

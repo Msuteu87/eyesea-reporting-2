@@ -1,3 +1,4 @@
+import 'dart:developer';
 import 'dart:io';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/errors/exceptions.dart';
@@ -57,51 +58,104 @@ class ReportDataSource {
     }
   }
 
-  /// Fetch reports within a bounding box using PostGIS server-side filtering
+  /// Fetch reports within a bounding box WITH images included (no N+1 queries).
+  /// Supports delta sync via [updatedSince] parameter.
+  /// Supports server-side status filtering via [statuses] parameter.
   Future<List<Map<String, dynamic>>> fetchReportsInBounds({
     required double minLat,
     required double maxLat,
     required double minLng,
     required double maxLng,
     int limit = 500,
+    DateTime? updatedSince,
+    List<String>? statuses, // Optional: filter by status server-side
   }) async {
     try {
-      final response = await _supabase.rpc('get_reports_in_bounds', params: {
+      // Use the new optimized RPC that includes images (fixes N+1)
+      final params = <String, dynamic>{
         'min_lng': minLng,
         'min_lat': minLat,
         'max_lng': maxLng,
         'max_lat': maxLat,
         'max_results': limit,
-      });
+      };
+
+      // Add delta sync parameter if provided
+      if (updatedSince != null) {
+        params['p_updated_since'] = updatedSince.toUtc().toIso8601String();
+      }
+
+      // Add status filter if provided (reduces network transfer)
+      if (statuses != null && statuses.isNotEmpty) {
+        params['p_statuses'] = statuses;
+      }
+
+      log('[ReportDataSource] Calling get_reports_in_bounds_with_images with bounds: ($minLat,$minLng) to ($maxLat,$maxLng), delta: ${updatedSince != null}');
+
+      final response = await _supabase.rpc(
+        'get_reports_in_bounds_with_images',
+        params: params,
+      );
 
       final reports = List<Map<String, dynamic>>.from(response);
+      log('[ReportDataSource] Got ${reports.length} reports from get_reports_in_bounds_with_images');
 
-      await _attachImagesToReports(reports);
-
+      // Images already included - no additional queries needed!
       return reports;
     } catch (e) {
-      // Fallback to client-side filtering if RPC doesn't exist yet
-      final allReports = await fetchReports();
+      log('[ReportDataSource] get_reports_in_bounds_with_images failed: $e, trying fallback');
+      // Fallback to old RPC if new one doesn't exist yet
+      try {
+        final response = await _supabase.rpc('get_reports_in_bounds', params: {
+          'min_lng': minLng,
+          'min_lat': minLat,
+          'max_lng': maxLng,
+          'max_lat': maxLat,
+          'max_results': limit,
+        });
 
-      return allReports
-          .where((report) {
-            final location = report['location'] as String?;
-            if (location == null) return false;
+        final reports = List<Map<String, dynamic>>.from(response);
+        log('[ReportDataSource] Fallback got ${reports.length} reports');
+        await _attachImagesToReports(reports);
+        return reports;
+      } catch (e2) {
+        log('[ReportDataSource] Fallback also failed: $e2');
+        throw ServerException(message: e2.toString());
+      }
+    }
+  }
 
-            final match =
-                RegExp(r'POINT\(([-\d.]+) ([-\d.]+)\)').firstMatch(location);
-            if (match == null) return false;
+  /// Fetch clustered reports for efficient map rendering at low zoom levels.
+  /// At zoom >= 14, returns individual points.
+  /// At zoom < 14, returns cluster centroids with point counts.
+  Future<List<Map<String, dynamic>>> fetchClusteredReports({
+    required double minLat,
+    required double maxLat,
+    required double minLng,
+    required double maxLng,
+    required int zoomLevel,
+    int limit = 500,
+  }) async {
+    try {
+      final response = await _supabase.rpc('get_clustered_reports', params: {
+        'min_lng': minLng,
+        'min_lat': minLat,
+        'max_lng': maxLng,
+        'max_lat': maxLat,
+        'zoom_level': zoomLevel,
+        'max_results': limit,
+      });
 
-            final lng = double.tryParse(match.group(1) ?? '') ?? 0;
-            final lat = double.tryParse(match.group(2) ?? '') ?? 0;
-
-            return lat >= minLat &&
-                lat <= maxLat &&
-                lng >= minLng &&
-                lng <= maxLng;
-          })
-          .take(limit)
-          .toList();
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      // Fallback to regular bounds fetch if clustering RPC doesn't exist
+      return fetchReportsInBounds(
+        minLat: minLat,
+        maxLat: maxLat,
+        minLng: minLng,
+        maxLng: maxLng,
+        limit: limit,
+      );
     }
   }
 

@@ -117,13 +117,15 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       AppLogger.info('[Onboarding] App resumed. Checking permission...');
       Future.delayed(const Duration(milliseconds: 500), () {
         if (mounted) {
-          _checkCurrentPagePermission();
+          _checkCurrentPagePermissionOnResume();
         }
       });
     }
   }
 
-  Future<void> _checkCurrentPagePermission() async {
+  /// Called ONLY when returning from Settings (app resumed).
+  /// This checks if the user granted permission while in Settings.
+  Future<void> _checkCurrentPagePermissionOnResume() async {
     // Don't check if already navigating
     if (_isNavigating) {
       AppLogger.debug('[Onboarding] Skipping resume check - already navigating');
@@ -135,11 +137,12 @@ class _OnboardingScreenState extends State<OnboardingScreen>
 
     // Handle notification page specially
     if (pageData.isNotificationPage) {
+      final hasBeenShown = _shownPermissionPages.contains(_currentPage);
       final notificationService = context.read<NotificationService>();
       final granted = await notificationService.checkPermission();
-      AppLogger.debug('[Onboarding] Resume check: notification = $granted');
+      AppLogger.debug('[Onboarding] Resume check: notification = $granted, hasBeenShown = $hasBeenShown');
 
-      if (granted && _currentPage == pageIndexWhenCalled && !_isNavigating) {
+      if (granted && _currentPage == pageIndexWhenCalled && !_isNavigating && hasBeenShown) {
         setState(() {
           _permissionGrantedStates[Permission.notification] = true;
         });
@@ -213,7 +216,8 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                   setState(() {
                     _currentPage = index;
                   });
-                  _checkCurrentPagePermission();
+                  // NOTE: Don't check permissions here - it causes random skipping
+                  // when permissions are already granted. Only check on resume from Settings.
                 },
                 itemBuilder: (context, index) {
                   final data = _pages[index];
@@ -524,6 +528,9 @@ class _OnboardingScreenState extends State<OnboardingScreen>
 
     // --- Notification Page: Use NotificationService instead of permission_handler ---
     if (pageData.isNotificationPage && !kIsWeb) {
+      // Mark page as shown so auto-advance works when returning from Settings
+      _shownPermissionPages.add(_currentPage);
+
       final notificationService = context.read<NotificationService>();
       final granted = await notificationService.requestPermission();
 

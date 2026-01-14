@@ -121,7 +121,8 @@ GRANT EXECUTE ON FUNCTION public.get_user_total_xp(uuid) TO authenticated;
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'get_events_with_details') THEN
-    EXECUTE 'GRANT EXECUTE ON FUNCTION public.get_events_with_details(double precision, double precision, double precision, double precision, int) TO anon, authenticated';
+    -- Correct signature: (uuid, text, int) for (p_user_id, p_filter, p_limit)
+    EXECUTE 'GRANT EXECUTE ON FUNCTION public.get_events_with_details(uuid, text, int) TO anon, authenticated';
   END IF;
   IF EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'get_event_attendees') THEN
     EXECUTE 'GRANT EXECUTE ON FUNCTION public.get_event_attendees(uuid) TO anon, authenticated';

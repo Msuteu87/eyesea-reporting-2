@@ -7,6 +7,7 @@ import 'app.dart';
 import 'core/secrets.dart';
 import 'core/utils/logger.dart';
 import 'core/services/connectivity_service.dart';
+import 'core/services/report_cache_service.dart';
 import 'core/services/report_queue_service.dart';
 import 'core/services/notification_service.dart';
 import 'data/datasources/auth_data_source.dart';
@@ -85,6 +86,11 @@ Future<void> main() async {
       ReportQueueService(reportDataSource, connectivityService);
   await reportQueueService.initialize();
 
+  // Initialize report cache service for offline caching and delta sync
+  final reportCacheService = ReportCacheService();
+  await reportCacheService.initialize();
+  AppLogger.info('Report cache service initialized');
+
   final aiAnalysisService = AIAnalysisService();
 
   // Initialize badge data source and profile provider for gamification
@@ -100,6 +106,7 @@ Future<void> main() async {
     reportDataSource,
     reportQueueService,
     connectivityService,
+    reportCacheService,
   );
 
   // Create social feed data source and provider

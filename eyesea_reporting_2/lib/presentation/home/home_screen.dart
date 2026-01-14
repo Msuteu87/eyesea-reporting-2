@@ -1,5 +1,8 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' hide ImageSource;
 import 'package:geolocator/geolocator.dart' as geo;
 import 'package:provider/provider.dart';
@@ -29,11 +32,32 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   bool _mapReady = false;
   bool _initialLoadDone = false;
   bool _pinImagesAdded = false;
-  MapMarkerData? _selectedMarker;
   String? _currentMapStyle;
+
+  // Use ValueNotifier for selected marker to avoid full widget rebuilds
+  final _selectedMarkerNotifier = ValueNotifier<MapMarkerData?>(null);
 
   // Save reference to provider to safely remove listener in dispose
   ReportsMapProvider? _reportsProvider;
+
+  // Debounce timers for performance
+  Timer? _markerUpdateDebounce;
+  Timer? _viewportDebounce;
+  static const _viewportBufferPercent = 0.3; // 30% buffer around viewport
+
+  // Track last viewport to avoid redundant fetches
+  double? _lastMinLat, _lastMaxLat, _lastMinLng, _lastMaxLng;
+  int _lastZoomLevel = 10;
+
+  // Cached pin images (generated once at startup)
+  Map<String, Uint8List>? _cachedPinImages;
+
+  // Mutex to prevent concurrent _renderMarkersWithClustering calls
+  bool _isRenderingMarkers = false;
+
+  // "Search this area" button state
+  bool _showSearchAreaButton = false;
+  Map<String, double>? _lastFetchedBounds;
 
   // Mapbox style: dynamic based on theme
   String get _mapStyle {
@@ -149,13 +173,20 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     // Use saved reference to avoid accessing deactivated context
     _reportsProvider?.removeListener(_onMarkersUpdated);
+    _markerUpdateDebounce?.cancel();
+    _viewportDebounce?.cancel();
+    _selectedMarkerNotifier.dispose();
     super.dispose();
   }
 
+  /// Debounced marker update handler for better performance
   void _onMarkersUpdated() {
-    if (_mapReady && mounted) {
-      _renderMarkersWithClustering();
-    }
+    _markerUpdateDebounce?.cancel();
+    _markerUpdateDebounce = Timer(const Duration(milliseconds: 100), () {
+      if (_mapReady && mounted) {
+        _renderMarkersWithClustering();
+      }
+    });
   }
 
   Future<void> _getCurrentLocation() async {
@@ -190,11 +221,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       // Disable scale bar ornament for cleaner UI
       await mapboxMap.scaleBar.updateSettings(ScaleBarSettings(enabled: false));
 
-      // Enable user location puck
+      // Enable user location puck (disable pulsing for performance on low-end devices)
       await mapboxMap.location.updateSettings(
         LocationComponentSettings(
           enabled: true,
-          pulsingEnabled: true,
+          pulsingEnabled: false, // Disabled for performance
           puckBearingEnabled: true,
         ),
       );
@@ -202,7 +233,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       // Customize water color based on theme
       _updateWaterColor(isDark);
 
-      // Generate and add pin marker images
+      // Pre-generate and cache pin images once
+      _cachedPinImages ??= await MapPinGenerator.generateAllPins();
+
+      // Add pin images to style
       await _addPinImagesToStyle();
 
       // If we have location, fly to it
@@ -221,14 +255,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         );
       }
 
-      // No longer using CircleAnnotationManager for clustering
-      // GeoJSON source + layers will be added in _setupClusterLayers
-
       _mapReady = true;
       AppLogger.info('Map ready, loading markers...');
 
-      // Load and display all markers
-      await _loadAllMarkers();
+      // Load initial viewport markers
+      await _loadViewportMarkers();
     } catch (e, stackTrace) {
       AppLogger.error('Error initializing map: $e', e, stackTrace);
       // Still mark as ready so user can see something
@@ -236,28 +267,108 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
-  /// Load all markers (no viewport filtering for now - simplify)
-  Future<void> _loadAllMarkers() async {
-    if (_initialLoadDone) return; // Only load once on init
-    _initialLoadDone = true;
-
-    final provider = context.read<ReportsMapProvider>();
-    await provider.loadMarkers(); // Load all, no bounds
-    await _renderMarkersWithClustering();
-
-    // If we have markers but no GPS, fly to first marker
-    if (_currentPosition == null && provider.markers.isNotEmpty) {
-      final first = provider.markers.first;
-      await _mapboxMap?.flyTo(
-        CameraOptions(
-          center: Point(
-            coordinates: Position(first.longitude, first.latitude),
-          ),
-          zoom: 12.0,
-        ),
-        MapAnimationOptions(duration: 1500),
-      );
+  /// Load markers for the current viewport with buffer
+  Future<void> _loadViewportMarkers() async {
+    if (_mapboxMap == null || !_mapReady) {
+      return;
     }
+
+    try {
+      // Get current camera state
+      final cameraState = await _mapboxMap!.getCameraState();
+      final zoomLevel = cameraState.zoom.toInt();
+
+      // Get visible bounds
+      final bounds = await _mapboxMap!.coordinateBoundsForCamera(
+        CameraOptions(
+          center: cameraState.center,
+          zoom: cameraState.zoom,
+          bearing: cameraState.bearing,
+          pitch: cameraState.pitch,
+        ),
+      );
+
+      // Calculate bounds with buffer for smoother panning
+      final swLat = bounds.southwest.coordinates.lat.toDouble();
+      final swLng = bounds.southwest.coordinates.lng.toDouble();
+      final neLat = bounds.northeast.coordinates.lat.toDouble();
+      final neLng = bounds.northeast.coordinates.lng.toDouble();
+
+      final latRange = neLat - swLat;
+      final lngRange = neLng - swLng;
+      final latBuffer = latRange * _viewportBufferPercent;
+      final lngBuffer = lngRange * _viewportBufferPercent;
+
+      final minLat = swLat - latBuffer;
+      final maxLat = neLat + latBuffer;
+      final minLng = swLng - lngBuffer;
+      final maxLng = neLng + lngBuffer;
+
+      // Skip if viewport hasn't changed significantly
+      if (_isViewportUnchanged(minLat, maxLat, minLng, maxLng, zoomLevel)) {
+        return;
+      }
+
+      // Store viewport for comparison
+      _lastMinLat = minLat;
+      _lastMaxLat = maxLat;
+      _lastMinLng = minLng;
+      _lastMaxLng = maxLng;
+      _lastZoomLevel = zoomLevel;
+
+      // Store fetched bounds for "Search this area" button logic
+      _lastFetchedBounds = {
+        'minLat': minLat,
+        'maxLat': maxLat,
+        'minLng': minLng,
+        'maxLng': maxLng,
+      };
+
+      // Load markers for this viewport
+      if (!mounted) return;
+      final provider = context.read<ReportsMapProvider>();
+      await provider.loadMarkers(
+        minLat: minLat,
+        maxLat: maxLat,
+        minLng: minLng,
+        maxLng: maxLng,
+        zoomLevel: zoomLevel,
+      );
+
+      // Render markers if this is the first load
+      if (!_initialLoadDone) {
+        _initialLoadDone = true;
+        await _renderMarkersWithClustering();
+
+        // If we have markers but no GPS, fly to first marker
+        if (_currentPosition == null && provider.markers.isNotEmpty) {
+          final first = provider.markers.first;
+          await _mapboxMap?.flyTo(
+            CameraOptions(
+              center: Point(
+                coordinates: Position(first.longitude, first.latitude),
+              ),
+              zoom: 12.0,
+            ),
+            MapAnimationOptions(duration: 1500),
+          );
+        }
+      }
+    } catch (e) {
+      AppLogger.warning('Error loading viewport markers: $e');
+    }
+  }
+
+  /// Check if viewport has changed significantly enough to warrant a reload
+  bool _isViewportUnchanged(
+      double minLat, double maxLat, double minLng, double maxLng, int zoom) {
+    if (_lastMinLat == null) return false;
+    const threshold = 0.001; // ~100m at equator
+    return (minLat - _lastMinLat!).abs() < threshold &&
+        (maxLat - _lastMaxLat!).abs() < threshold &&
+        (minLng - _lastMinLng!).abs() < threshold &&
+        (maxLng - _lastMaxLng!).abs() < threshold &&
+        zoom == _lastZoomLevel;
   }
 
   /// Render markers using GeoJSON source with native Mapbox clustering
@@ -268,35 +379,47 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       return;
     }
 
-    final markers = _reportsProvider!.filteredMarkers; // Use filtered markers
-
-    AppLogger.info(
-        'Setting up clustering for ${markers.length} markers (filtered)');
-
-    // Always remove existing layers first (even if no markers to display)
-    try {
-      await _mapboxMap!.style.removeStyleLayer('unclustered-point');
-    } catch (_) {}
-    try {
-      await _mapboxMap!.style.removeStyleLayer('cluster-count');
-    } catch (_) {}
-    try {
-      await _mapboxMap!.style.removeStyleLayer('clusters');
-    } catch (_) {}
-    try {
-      await _mapboxMap!.style.removeStyleLayer('cluster-glow');
-    } catch (_) {}
-    try {
-      await _mapboxMap!.style.removeStyleSource('reports-source');
-    } catch (_) {}
-
-    if (markers.isEmpty) {
-      AppLogger.info('No markers to display - cleared map');
+    // Prevent concurrent calls (race condition fix)
+    if (_isRenderingMarkers) {
+      AppLogger.debug('Already rendering markers, skipping');
       return;
     }
+    _isRenderingMarkers = true;
 
-    // Build GeoJSON FeatureCollection
-    final features = markers
+    try {
+      final markers = _reportsProvider!.filteredMarkers; // Use filtered markers
+
+      AppLogger.info(
+          'Setting up clustering for ${markers.length} markers (filtered)');
+
+      // Remove layers in correct order (layers first, then source)
+      // Use sequential removal to avoid race conditions
+      final layersToRemove = [
+        'unclustered-point',
+        'cluster-count',
+        'clusters',
+        'cluster-glow',
+      ];
+      for (final layerId in layersToRemove) {
+        try {
+          await _mapboxMap!.style.removeStyleLayer(layerId);
+        } catch (_) {
+          // Layer doesn't exist, that's fine
+        }
+      }
+      try {
+        await _mapboxMap!.style.removeStyleSource('reports-source');
+      } catch (_) {
+        // Source doesn't exist, that's fine
+      }
+
+      if (markers.isEmpty) {
+        AppLogger.info('No markers to display - cleared map');
+        return;
+      }
+
+      // Build GeoJSON FeatureCollection
+      final features = markers
         .map((m) => {
               'type': 'Feature',
               'geometry': {
@@ -312,12 +435,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             })
         .toList();
 
-    final geoJson = {
-      'type': 'FeatureCollection',
-      'features': features,
-    };
+      final geoJson = {
+        'type': 'FeatureCollection',
+        'features': features,
+      };
 
-    try {
       // Add GeoJSON source with clustering enabled
       await _mapboxMap!.style.addSource(
         GeoJsonSource(
@@ -409,6 +531,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       AppLogger.info('Clustering layers set up successfully');
     } catch (e) {
       AppLogger.error('Error setting up clustering: $e');
+    } finally {
+      _isRenderingMarkers = false;
     }
   }
 
@@ -482,7 +606,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         final properties = Map<String, dynamic>.from(propertiesObj as Map);
 
         final markerId = properties['id']?.toString();
-        if (markerId != null) {
+        if (markerId != null && mounted) {
           // Find matching marker in provider
           final provider = this.context.read<ReportsMapProvider>();
           final matchingMarker = provider.markers.firstWhere(
@@ -490,18 +614,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             orElse: () => provider.markers.first,
           );
 
-          if (mounted) {
-            setState(() {
-              _selectedMarker = matchingMarker;
-            });
-          }
+          // Use ValueNotifier to avoid full widget rebuild
+          _selectedMarkerNotifier.value = matchingMarker;
           AppLogger.info('Selected marker: ${matchingMarker.id}');
         }
-      } else if (_selectedMarker != null && mounted) {
+      } else if (_selectedMarkerNotifier.value != null) {
         // Tapped on empty space - deselect
-        setState(() {
-          _selectedMarker = null;
-        });
+        _selectedMarkerNotifier.value = null;
       }
     } catch (e) {
       AppLogger.warning('Error querying markers: $e');
@@ -541,6 +660,149 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
+  /// Handle camera movement to show/hide "Search this area" button
+  void _onCameraChanged(CameraChangedEventData data) {
+    // Debounce camera changes
+    _viewportDebounce?.cancel();
+    _viewportDebounce = Timer(const Duration(milliseconds: 300), () async {
+      if (!mounted || _mapboxMap == null) return;
+
+      try {
+        final cameraState = await _mapboxMap!.getCameraState();
+        final bounds = await _mapboxMap!.coordinateBoundsForCamera(
+          CameraOptions(
+            center: cameraState.center,
+            zoom: cameraState.zoom,
+            bearing: cameraState.bearing,
+            pitch: cameraState.pitch,
+          ),
+        );
+
+        final currentBounds = {
+          'minLat': bounds.southwest.coordinates.lat.toDouble(),
+          'maxLat': bounds.northeast.coordinates.lat.toDouble(),
+          'minLng': bounds.southwest.coordinates.lng.toDouble(),
+          'maxLng': bounds.northeast.coordinates.lng.toDouble(),
+        };
+
+        // Check if viewport moved significantly outside last fetched bounds
+        final shouldShowButton = _isOutsideFetchedBounds(currentBounds);
+
+        if (shouldShowButton != _showSearchAreaButton) {
+          setState(() {
+            _showSearchAreaButton = shouldShowButton;
+          });
+        }
+      } catch (e) {
+        AppLogger.debug('Error in camera changed handler: $e');
+      }
+    });
+  }
+
+  /// Check if >20% of current viewport is outside last fetched bounds
+  bool _isOutsideFetchedBounds(Map<String, double> currentBounds) {
+    if (_lastFetchedBounds == null) return false;
+
+    final fetched = _lastFetchedBounds!;
+    final current = currentBounds;
+
+    // Calculate overlap percentage
+    final overlapMinLat =
+        current['minLat']!.clamp(fetched['minLat']!, fetched['maxLat']!);
+    final overlapMaxLat =
+        current['maxLat']!.clamp(fetched['minLat']!, fetched['maxLat']!);
+    final overlapMinLng =
+        current['minLng']!.clamp(fetched['minLng']!, fetched['maxLng']!);
+    final overlapMaxLng =
+        current['maxLng']!.clamp(fetched['minLng']!, fetched['maxLng']!);
+
+    final currentArea = (current['maxLat']! - current['minLat']!) *
+        (current['maxLng']! - current['minLng']!);
+    final overlapArea = (overlapMaxLat - overlapMinLat).clamp(0.0, double.infinity) *
+        (overlapMaxLng - overlapMinLng).clamp(0.0, double.infinity);
+
+    if (currentArea <= 0) return false;
+
+    final overlapPercentage = overlapArea / currentArea;
+
+    // Show button if less than 80% of current viewport is covered by fetched area
+    return overlapPercentage < 0.8;
+  }
+
+  /// Search for reports in the current viewport area
+  Future<void> _searchThisArea() async {
+    if (_mapboxMap == null) return;
+
+    try {
+      final cameraState = await _mapboxMap!.getCameraState();
+      final zoomLevel = cameraState.zoom.toInt();
+
+      final bounds = await _mapboxMap!.coordinateBoundsForCamera(
+        CameraOptions(
+          center: cameraState.center,
+          zoom: cameraState.zoom,
+          bearing: cameraState.bearing,
+          pitch: cameraState.pitch,
+        ),
+      );
+
+      // Calculate bounds with buffer
+      final swLat = bounds.southwest.coordinates.lat.toDouble();
+      final swLng = bounds.southwest.coordinates.lng.toDouble();
+      final neLat = bounds.northeast.coordinates.lat.toDouble();
+      final neLng = bounds.northeast.coordinates.lng.toDouble();
+
+      final latRange = neLat - swLat;
+      final lngRange = neLng - swLng;
+      final latBuffer = latRange * _viewportBufferPercent;
+      final lngBuffer = lngRange * _viewportBufferPercent;
+
+      final minLat = swLat - latBuffer;
+      final maxLat = neLat + latBuffer;
+      final minLng = swLng - lngBuffer;
+      final maxLng = neLng + lngBuffer;
+
+      // Hide button and show loading state
+      setState(() {
+        _showSearchAreaButton = false;
+      });
+
+      // Update fetched bounds
+      _lastFetchedBounds = {
+        'minLat': minLat,
+        'maxLat': maxLat,
+        'minLng': minLng,
+        'maxLng': maxLng,
+      };
+
+      // Also update viewport tracking
+      _lastMinLat = minLat;
+      _lastMaxLat = maxLat;
+      _lastMinLng = minLng;
+      _lastMaxLng = maxLng;
+      _lastZoomLevel = zoomLevel;
+
+      // Fetch reports for this area
+      if (!mounted) return;
+      final provider = context.read<ReportsMapProvider>();
+      await provider.loadMarkers(
+        minLat: minLat,
+        maxLat: maxLat,
+        minLng: minLng,
+        maxLng: maxLng,
+        zoomLevel: zoomLevel,
+      );
+
+      AppLogger.info('Searched area: $minLat,$minLng to $maxLat,$maxLng');
+    } catch (e) {
+      AppLogger.error('Error searching area: $e');
+      // Show button again if search failed
+      setState(() {
+        _showSearchAreaButton = true;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final initialCamera = CameraOptions(
@@ -567,6 +829,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   cameraOptions: initialCamera,
                   styleUri: _mapStyle,
                   onMapCreated: _onMapCreated,
+                  onCameraChangeListener: _onCameraChanged,
                 ),
 
           // Floating search bar with user avatar (top)
@@ -579,44 +842,85 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             ),
           ),
 
-          // Report Detail Card (bottom, above nav bar)
-          if (_selectedMarker != null)
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 105,
-              child: ReportDetailCard(
-                marker: _selectedMarker!,
-                onClose: () {
-                  if (mounted) {
-                    setState(() {
-                      _selectedMarker = null;
-                    });
-                  }
-                },
-                onMarkRecovered: (reportId) async {
-                  final provider = context.read<ReportsMapProvider>();
-                  await provider.markAsRecovered(reportId);
-                  // Update selected marker to reflect new status
-                  if (mounted) {
-                    final updated = provider.markers.firstWhere(
-                      (m) => m.id == reportId,
-                      orElse: () => _selectedMarker!,
-                    );
-                    setState(() {
-                      _selectedMarker = updated;
-                    });
-                  }
-                },
+          // "Search this area" button (appears when user pans to new area)
+          AnimatedPositioned(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOutCubic,
+            top: _showSearchAreaButton
+                ? MediaQuery.of(context).padding.top + 72
+                : MediaQuery.of(context).padding.top + 40,
+            left: 0,
+            right: 0,
+            child: AnimatedOpacity(
+              duration: const Duration(milliseconds: 200),
+              opacity: _showSearchAreaButton ? 1.0 : 0.0,
+              child: IgnorePointer(
+                ignoring: !_showSearchAreaButton,
+                child: Center(
+                  child: Material(
+                    color: Colors.transparent,
+                    child: ActionChip(
+                      avatar: const Icon(
+                        LucideIcons.refreshCw,
+                        size: 16,
+                      ),
+                      label: const Text('Search this area'),
+                      onPressed: _searchThisArea,
+                      backgroundColor:
+                          Theme.of(context).colorScheme.surface.withValues(alpha: 0.95),
+                      side: BorderSide(
+                        color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+                      ),
+                      elevation: 4,
+                      shadowColor: Colors.black26,
+                    ),
+                  ),
+                ),
               ),
             ),
+          ),
+
+          // Report Detail Card (bottom, above nav bar) - isolated rebuild
+          ValueListenableBuilder<MapMarkerData?>(
+            valueListenable: _selectedMarkerNotifier,
+            builder: (context, selectedMarker, _) {
+              if (selectedMarker == null) return const SizedBox.shrink();
+              return Positioned(
+                left: 0,
+                right: 0,
+                bottom: 105,
+                child: ReportDetailCard(
+                  marker: selectedMarker,
+                  onClose: () {
+                    _selectedMarkerNotifier.value = null;
+                  },
+                  onMarkRecovered: (reportId) async {
+                    final provider = context.read<ReportsMapProvider>();
+                    await provider.markAsRecovered(reportId);
+                    // Update selected marker to reflect new status
+                    final updated = provider.markers.firstWhere(
+                      (m) => m.id == reportId,
+                      orElse: () => selectedMarker,
+                    );
+                    _selectedMarkerNotifier.value = updated;
+                  },
+                ),
+              );
+            },
+          ),
 
           // FAB Stack (bottom right, animates up when card appears)
-          AnimatedPositioned(
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeOutCubic,
-            bottom: _selectedMarker != null ? 600 : 131,
-            right: 16,
+          ValueListenableBuilder<MapMarkerData?>(
+            valueListenable: _selectedMarkerNotifier,
+            builder: (context, selectedMarker, child) {
+              return AnimatedPositioned(
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeOutCubic,
+                bottom: selectedMarker != null ? 600 : 131,
+                right: 16,
+                child: child!,
+              );
+            },
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
