@@ -5,6 +5,17 @@ import '../../domain/repositories/badge_repository.dart';
 import '../../domain/repositories/report_repository.dart';
 import '../../core/utils/logger.dart';
 
+// TODO: [SCALABILITY] Unbounded list growth in _userReports
+// Current: _userReports = [..._userReports, ...newReports] grows indefinitely
+// At 5000 users: Power users with 100s of reports will accumulate excessive memory
+// Fix: Cap list size (e.g., 50 items max) or implement windowed pagination
+// that drops older items when new ones are loaded.
+
+// TODO: [SCALABILITY] Replace offset pagination with cursor-based pagination
+// Current: Uses _reportsOffset which gets slower as offset increases
+// Fix: Use cursor (last report's createdAt or ID) for keyset pagination
+// This is O(1) vs O(n) for offset-based queries
+
 /// Provider for profile page data including badges, stats, and user reports.
 class ProfileProvider extends ChangeNotifier {
   final BadgeRepository _badgeRepository;

@@ -6,15 +6,26 @@ import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' hide ImageSource;
 import 'package:geolocator/geolocator.dart' as geo;
 import 'package:provider/provider.dart';
 
+// TODO: [LIFECYCLE] Handle location permission changes while backgrounded
+// Current: If user disables location in settings while app is backgrounded,
+// _getCurrentLocation won't refresh and may provide stale coordinates
+// Fix: Check permission status in didChangeAppLifecycleState resumed state
+
+// TODO: [MEMORY] Verify MapboxMap cleanup in dispose
+// Current: _mapboxMap reference may hold native resources
+// Fix: Ensure all map listeners are removed and consider nullifying reference
+
 import '../../core/utils/logger.dart';
 import '../providers/auth_provider.dart';
 import '../providers/reports_map_provider.dart';
 import 'helpers/map_bounds_helper.dart';
 import 'helpers/map_marker_renderer.dart';
+import 'helpers/map_heatmap_renderer.dart';
 import 'helpers/map_tap_handler.dart';
 import 'helpers/viewport_bounds.dart';
 import 'widgets/layer_filter_fab.dart';
 import 'widgets/layer_filter_sheet.dart';
+import 'widgets/home_filter_bar.dart';
 import 'widgets/map_search_bar.dart';
 import 'widgets/my_location_fab.dart';
 import 'widgets/report_detail_card.dart';
@@ -115,6 +126,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         _markerRenderer?.resetPinImages();
         // Re-apply custom layers after style change
         _renderMarkersWithClustering();
+        _updateHeatmap(); // Re-apply heatmap layer
         _updateWaterColor(isDark);
       }).catchError((e) {
         AppLogger.error('Error updating map style: $e');
@@ -133,6 +145,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
+  MapHeatmapRenderer? _heatmapRenderer; // New
+
+  // ...
+
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
@@ -149,9 +165,33 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _markerUpdateDebounce?.cancel();
     _markerUpdateDebounce = Timer(const Duration(milliseconds: 100), () {
       if (_mapReady && mounted) {
-        _renderMarkersWithClustering();
+        final isHeatmap = _reportsProvider?.isHeatmapEnabled ?? false;
+
+        if (isHeatmap) {
+          // In heatmap mode: Show heatmap, hide markers
+          _updateHeatmap();
+          _markerRenderer?.clearLayers(); // Ensure markers are gone
+        } else {
+          // In normal mode: Show markers, hide heatmap
+          _renderMarkersWithClustering();
+          _heatmapRenderer?.toggleHeatmap(false, []); // Ensure heatmap is gone
+        }
       }
     });
+  }
+
+  // New method to handle heatmap updates
+  Future<void> _updateHeatmap() async {
+    if (_heatmapRenderer == null || !mounted || _reportsProvider == null) {
+      return;
+    }
+
+    // Pass the actual enabled state. If this called, we are likely in heatmap mode,
+    // but the renderer check handles the toggle logic.
+    await _heatmapRenderer!.toggleHeatmap(
+      _reportsProvider!.isHeatmapEnabled,
+      _reportsProvider!.heatmapPoints,
+    );
   }
 
   Future<void> _getCurrentLocation() async {
@@ -200,6 +240,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
       // Initialize marker renderer and tap handler
       _markerRenderer = MapMarkerRenderer(mapboxMap);
+      _heatmapRenderer = MapHeatmapRenderer(mapboxMap); // Initialize
       _tapHandler = MapTapHandler(mapboxMap);
 
       // If we have location, fly to it
@@ -375,7 +416,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  /// Handle camera movement to show/hide "Search this area" button
+  /// Handle camera movement
   void _onCameraChanged(CameraChangedEventData data) {
     // Debounce camera changes
     _viewportDebounce?.cancel();
@@ -383,18 +424,38 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       if (!mounted || _mapboxMap == null) return;
 
       try {
-        final currentBounds = await MapBoundsHelper.getViewportBounds(_mapboxMap!);
+        final currentBounds =
+            await MapBoundsHelper.getViewportBounds(_mapboxMap!);
 
-        // Check if viewport moved significantly outside last fetched bounds
-        final shouldShowButton = MapBoundsHelper.isOutsideFetchedBounds(
-          currentBounds,
-          _lastFetchedBounds,
-        );
+        final provider = context.read<ReportsMapProvider>();
 
-        if (shouldShowButton != _showSearchAreaButton) {
-          setState(() {
-            _showSearchAreaButton = shouldShowButton;
-          });
+        if (provider.isHeatmapEnabled) {
+          // Heatmap Mode: Automatically reload heatmap data for new viewport
+          await provider.reloadHeatmapForViewport(
+            minLat: currentBounds.minLat,
+            maxLat: currentBounds.maxLat,
+            minLng: currentBounds.minLng,
+            maxLng: currentBounds.maxLng,
+          );
+          // Hide search button in heatmap mode
+          if (_showSearchAreaButton) {
+            setState(() {
+              _showSearchAreaButton = false;
+            });
+          }
+        } else {
+          // Normal Mode: Check if we need to show "Search this area" button
+          // Check if viewport moved significantly outside last fetched bounds
+          final shouldShowButton = MapBoundsHelper.isOutsideFetchedBounds(
+            currentBounds,
+            _lastFetchedBounds,
+          );
+
+          if (shouldShowButton != _showSearchAreaButton) {
+            setState(() {
+              _showSearchAreaButton = shouldShowButton;
+            });
+          }
         }
       } catch (e) {
         AppLogger.debug('Error in camera changed handler: $e');
@@ -435,7 +496,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         zoomLevel: zoomLevel,
       );
 
-      AppLogger.info('Searched area: ${bounds.minLat},${bounds.minLng} to ${bounds.maxLat},${bounds.maxLng}');
+      AppLogger.info(
+          'Searched area: ${bounds.minLat},${bounds.minLng} to ${bounds.maxLat},${bounds.maxLng}');
     } catch (e) {
       AppLogger.error('Error searching area: $e');
       // Show button again if search failed
@@ -484,6 +546,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             ),
           ),
 
+          // Filter Chips (below search bar)
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 80,
+            left: 0,
+            right: 0,
+            child: const HomeFilterBar(),
+          ),
+
           // "Search this area" button (appears when user pans to new area)
           AnimatedPositioned(
             duration: const Duration(milliseconds: 200),
@@ -508,10 +578,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       ),
                       label: const Text('Search this area'),
                       onPressed: _searchThisArea,
-                      backgroundColor:
-                          Theme.of(context).colorScheme.surface.withValues(alpha: 0.95),
+                      backgroundColor: Theme.of(context)
+                          .colorScheme
+                          .surface
+                          .withValues(alpha: 0.95),
                       side: BorderSide(
-                        color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+                        color: Theme.of(context)
+                            .colorScheme
+                            .outline
+                            .withValues(alpha: 0.3),
                       ),
                       elevation: 4,
                       shadowColor: Colors.black26,
@@ -588,10 +663,27 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       context,
       currentStatuses: provider.visibleStatuses,
       showOnlyMyReports: provider.showOnlyMyReports,
+      isHeatmapEnabled: provider.isHeatmapEnabled,
     );
     if (result != null) {
+      if (result.isHeatmapEnabled && !provider.isHeatmapEnabled) {
+        // Heatmap was just enabled, zoom out to global view
+        _mapboxMap?.flyTo(
+          CameraOptions(
+            center: Point(
+                coordinates:
+                    Position(0, 20)), // Centered roughly for global view
+            zoom: 1.5,
+            pitch: 0,
+            bearing: 0,
+          ),
+          MapAnimationOptions(duration: 2000), // Smooth 2s animation
+        );
+      }
+
       provider.setVisibleStatuses(result.statuses);
       provider.setShowOnlyMyReports(result.showOnlyMyReports);
+      provider.setHeatmapEnabled(result.isHeatmapEnabled);
     }
   }
 }

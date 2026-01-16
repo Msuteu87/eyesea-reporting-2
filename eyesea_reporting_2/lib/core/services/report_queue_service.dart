@@ -12,6 +12,21 @@ import '../utils/logger.dart';
 import 'connectivity_service.dart';
 import 'secure_storage_service.dart';
 
+// TODO: [SCALABILITY] Implement request batching for sync
+// Current: Each report requires 4 sequential HTTP requests:
+//   1. createReport() 2. uploadImage() 3. createImageRecord() 4. createAIRecord()
+// At 5000 users with 10 pending reports each: 200,000 sequential requests
+// Fix: Batch operations where possible:
+//   - Use bulk insert for reports (single request for multiple reports)
+//   - Upload images in parallel (max 3-5 concurrent)
+//   - Use bulk insert for image/AI records
+// Example: await Future.wait(images.map(upload).take(3)); // 3 parallel uploads
+
+// TODO: [SCALABILITY] Add concurrency limit for sync operations
+// Current: Single sequential loop, but no global concurrency management
+// Fix: Use a semaphore or pool to limit concurrent operations across the app
+// This prevents overwhelming the server when many users come online at once
+
 /// Service to manage offline report queue.
 /// Stores reports locally in Hive and syncs to Supabase when online.
 class ReportQueueService {

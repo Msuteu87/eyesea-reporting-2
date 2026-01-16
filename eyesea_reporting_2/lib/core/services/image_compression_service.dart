@@ -3,6 +3,18 @@ import 'dart:typed_data';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:path_provider/path_provider.dart';
 
+// TODO: [DOCUMENTATION] Document compression strategy and tradeoffs
+// Current settings: 80% quality, max 1920x1920
+// Rationale: Balances file size (~200-500KB) with detail for AI analysis
+// Consider: Add to README or wiki for future maintainers
+
+// TODO: [PERFORMANCE] Adaptive compression based on network quality
+// Current: Fixed 80% quality regardless of connection speed
+// Fix: Detect network type (WiFi vs cellular vs slow), adjust quality:
+//   - WiFi: 90% quality for best detail
+//   - Cellular: 70% quality for faster upload
+//   - Slow/offline queue: 60% quality to minimize storage
+
 /// Service for compressing images before upload to reduce bandwidth and storage.
 class ImageCompressionService {
   /// Compress an image file to reduce size.

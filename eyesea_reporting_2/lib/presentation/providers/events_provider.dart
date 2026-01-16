@@ -2,6 +2,12 @@ import 'package:flutter/material.dart';
 import '../../domain/entities/event.dart';
 import '../../domain/repositories/event_repository.dart';
 
+// TODO: [SCALABILITY] Add pagination for past events
+// Current: fetchPastEvents() loads all past events at once
+// At scale: Years of events = unbounded memory growth
+// Fix: Add limit/offset or cursor-based pagination for past events
+// Upcoming events typically bounded naturally by time
+
 /// Provider for managing events state and operations.
 class EventsProvider with ChangeNotifier {
   final EventRepository _repository;

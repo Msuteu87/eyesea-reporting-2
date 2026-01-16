@@ -1,5 +1,16 @@
 // TODO: [MAINTAINABILITY] This file is 594 lines - provider does too much.
 // Split into: ReportsDataProvider, ReportsFilterProvider, ReportsMarkerProvider
+
+// TODO: [SCALABILITY] Multiple stream subscriptions from same services
+// Current: Subscribes to _queueService.pendingCountStream and
+// _connectivityService.onConnectivityChanged - same as other providers
+// Risk: 5000 users × 3+ providers = 15,000+ active stream listeners
+// Fix: Use a single StreamMultiplexer or shared subscription manager
+
+// TODO: [PERFORMANCE] Cache invalidation clears entire filter cache
+// Current: _cachedFilteredMarkers = null on any filter change
+// Fix: Implement granular cache invalidation based on what changed
+
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
@@ -9,6 +20,7 @@ import '../../core/services/report_queue_service.dart';
 import '../../core/utils/logger.dart';
 import '../../domain/entities/pending_report.dart';
 import '../../domain/entities/report.dart';
+import '../../domain/entities/heatmap_point.dart';
 import '../../domain/repositories/report_repository.dart';
 
 /// Data class for map markers combining local and remote reports
@@ -49,7 +61,8 @@ class MapMarkerData {
 
   /// Create from a pending (local) report
   /// [currentUserId] should be passed since pending reports are always from the current user
-  factory MapMarkerData.fromPending(PendingReport report, {String? currentUserId}) {
+  factory MapMarkerData.fromPending(PendingReport report,
+      {String? currentUserId}) {
     // Convert String keys to PollutionType keys
     final counts = <PollutionType, int>{};
     for (final entry in report.pollutionCounts.entries) {
@@ -60,7 +73,8 @@ class MapMarkerData {
     // Calculate total items
     final totalItems = counts.values.fold(0, (sum, count) => sum + count);
 
-    AppLogger.debug('fromPending: id=${report.id}, weight=${report.totalWeightKg}, items=$totalItems, counts=$counts');
+    AppLogger.debug(
+        'fromPending: id=${report.id}, weight=${report.totalWeightKg}, items=$totalItems, counts=$counts');
 
     return MapMarkerData(
       id: report.id,
@@ -85,7 +99,8 @@ class MapMarkerData {
     final totalItems =
         report.pollutionCounts.values.fold(0, (sum, count) => sum + count);
 
-    AppLogger.debug('fromEntity: id=${report.id}, weight=${report.totalWeightKg}, items=$totalItems, counts=${report.pollutionCounts}');
+    AppLogger.debug(
+        'fromEntity: id=${report.id}, weight=${report.totalWeightKg}, items=$totalItems, counts=${report.pollutionCounts}');
 
     return MapMarkerData(
       id: report.id,
@@ -227,8 +242,90 @@ class ReportsMapProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get error => _error;
   Set<ReportStatus> get visibleStatuses => _visibleStatuses;
+
   bool get showOnlyMyReports => _showOnlyMyReports;
   String? get currentUserId => _currentUserId;
+
+  // Heatmap State
+  bool _isHeatmapEnabled = false;
+  List<HeatmapPoint> _heatmapPoints = [];
+  bool get isHeatmapEnabled => _isHeatmapEnabled;
+  List<HeatmapPoint> get heatmapPoints => _heatmapPoints;
+
+  /// Toggle heatmap layer
+  Future<void> setHeatmapEnabled(bool enabled) async {
+    if (_isHeatmapEnabled == enabled) return;
+    _isHeatmapEnabled = enabled;
+
+    if (enabled) {
+      // When enabling heatmap, ALWAYS load global bounds first.
+      // The UI will zoom to global view, and we need data for the whole world.
+      // Using the last viewport would load data for a small area that becomes
+      // invisible when zoomed out to global view.
+      AppLogger.info('Heatmap enabled - loading global bounds');
+      await reloadHeatmapForViewport(
+        minLat: -85,
+        maxLat: 85,
+        minLng: -180,
+        maxLng: 180,
+      );
+    } else {
+      // Clear heatmap points to free memory when disabled
+      _heatmapPoints = [];
+    }
+
+    notifyListeners();
+  }
+
+  /// Reload heatmap points for specific bounds
+  Future<void> reloadHeatmapForViewport({
+    required double minLat,
+    required double maxLat,
+    required double minLng,
+    required double maxLng,
+  }) async {
+    if (!_isHeatmapEnabled) {
+      AppLogger.debug('reloadHeatmapForViewport called but heatmap is disabled');
+      return;
+    }
+
+    AppLogger.info(
+        'Loading heatmap for bounds: ($minLat, $minLng) to ($maxLat, $maxLng)');
+
+    // Store viewport
+    _lastMinLat = minLat;
+    _lastMaxLat = maxLat;
+    _lastMinLng = minLng;
+    _lastMaxLng = maxLng;
+
+    try {
+      _isLoading = true;
+      notifyListeners();
+
+      _heatmapPoints = await _repository.fetchHeatmapPoints(
+        minLat: minLat,
+        maxLat: maxLat,
+        minLng: minLng,
+        maxLng: maxLng,
+      );
+      AppLogger.info(
+          'Loaded ${_heatmapPoints.length} heatmap points for viewport');
+
+      if (_heatmapPoints.isEmpty) {
+        AppLogger.warning('No heatmap points found in the given bounds');
+      } else {
+        // Log sample for debugging
+        final sample = _heatmapPoints.take(3).map(
+            (p) => '(${p.latitude.toStringAsFixed(2)}, ${p.longitude.toStringAsFixed(2)})');
+        AppLogger.debug('Sample heatmap points: $sample');
+      }
+    } catch (e) {
+      AppLogger.error('Error loading heatmap points: $e');
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
 
   /// Set the current user ID for filtering
   void setCurrentUserId(String? userId) {
@@ -361,7 +458,8 @@ class ReportsMapProvider extends ChangeNotifier {
     required double maxLng,
     int zoomLevel = 10,
   }) async {
-    AppLogger.info('[ReportsMapProvider] loadMarkers called with bounds: ($minLat,$minLng) to ($maxLat,$maxLng), zoom: $zoomLevel');
+    AppLogger.info(
+        '[ReportsMapProvider] loadMarkers called with bounds: ($minLat,$minLng) to ($maxLat,$maxLng), zoom: $zoomLevel');
 
     if (_isLoading) {
       AppLogger.debug('[ReportsMapProvider] Already loading, skipping');
@@ -396,7 +494,8 @@ class ReportsMapProvider extends ChangeNotifier {
               pending.longitude > maxLng) {
             continue;
           }
-          combinedMarkers.add(MapMarkerData.fromPending(pending, currentUserId: _currentUserId));
+          combinedMarkers.add(MapMarkerData.fromPending(pending,
+              currentUserId: _currentUserId));
           seenIds.add(pending.id);
         }
       }
@@ -428,7 +527,8 @@ class ReportsMapProvider extends ChangeNotifier {
       }
 
       // 3. If online, fetch fresh data from Supabase
-      AppLogger.info('[ReportsMapProvider] Connectivity: isOnline=${_connectivityService.isOnline}');
+      AppLogger.info(
+          '[ReportsMapProvider] Connectivity: isOnline=${_connectivityService.isOnline}');
       if (_connectivityService.isOnline) {
         try {
           // Use delta sync ONLY if ALL conditions are met:
@@ -450,13 +550,41 @@ class ReportsMapProvider extends ChangeNotifier {
                 maxLng: maxLng,
               );
 
+              // Calculate area ratio to detect zoom-in from large cached bounds
+              // Problem: If we fetched a huge area (e.g. world view), delta sync will
+              // activate for ANY zoomed-in view, but we might want fresh data for the
+              // specific smaller area to ensure we have all details.
+              final currentArea = (maxLat - minLat) * (maxLng - minLng);
+              final lastBounds = _cacheService.getLastSyncedBounds();
+              double areaRatio = 1.0;
+              if (lastBounds != null) {
+                final cachedArea =
+                    (lastBounds['maxLat']! - lastBounds['minLat']!) *
+                        (lastBounds['maxLng']! - lastBounds['minLng']!);
+                if (cachedArea > 0) areaRatio = currentArea / cachedArea;
+              }
+
+              // Bypass cache if current viewport is <10% of cached bounds
+              // This fixes the "zoom out then zoom in" bug where markers don't reappear
+              const areaRatioThreshold = 0.1;
+              final shouldBypassCache = areaRatio < areaRatioThreshold;
+
               if (timeSinceSync.inHours < 24 && boundsInCache) {
-                // All conditions met - use delta sync
-                lastSync = cachedLastSync;
-                AppLogger.debug('Using delta sync (cache age: ${timeSinceSync.inHours}h)');
+                if (shouldBypassCache) {
+                  // Bypass cache to force fresh fetch for detailed view
+                  AppLogger.info(
+                      'Bypassing cache: viewport area ratio ${areaRatio.toStringAsFixed(4)} < $areaRatioThreshold');
+                  // Leave lastSync as null to trigger full refresh for this viewport
+                } else {
+                  // All conditions met - use delta sync
+                  lastSync = cachedLastSync;
+                  AppLogger.debug(
+                      'Using delta sync (cache age: ${timeSinceSync.inHours}h)');
+                }
               } else if (timeSinceSync.inHours >= 24) {
                 // Cache too old, clear and do full refresh
-                AppLogger.info('Cache too old (${timeSinceSync.inHours}h), clearing for full refresh');
+                AppLogger.info(
+                    'Cache too old (${timeSinceSync.inHours}h), clearing for full refresh');
                 await _cacheService.clearCache();
               }
               // else: Viewport outside cached bounds - do full refresh for this area
@@ -470,7 +598,8 @@ class ReportsMapProvider extends ChangeNotifier {
             maxLng: maxLng,
             updatedSince: lastSync,
           );
-          AppLogger.info('Fetched ${remoteData.length} reports from server (delta: ${lastSync != null})');
+          AppLogger.info(
+              'Fetched ${remoteData.length} reports from server (delta: ${lastSync != null})');
 
           // Update cache with new data
           if (_cacheService.isInitialized && remoteData.isNotEmpty) {
@@ -488,7 +617,8 @@ class ReportsMapProvider extends ChangeNotifier {
           // This ensures stale cache data doesn't persist
           if (lastSync == null && remoteData.isNotEmpty) {
             // Keep only pending markers, replace all cached with fresh server data
-            final pendingMarkers = combinedMarkers.where((m) => m.isPending).toList();
+            final pendingMarkers =
+                combinedMarkers.where((m) => m.isPending).toList();
             combinedMarkers.clear();
             seenIds.clear();
 
@@ -506,7 +636,8 @@ class ReportsMapProvider extends ChangeNotifier {
                 seenIds.add(report.id);
               }
             }
-            AppLogger.info('Full refresh: replaced cached markers with ${remoteData.length} server reports');
+            AppLogger.info(
+                'Full refresh: replaced cached markers with ${remoteData.length} server reports');
           } else {
             // Delta sync: merge new data with existing markers
             for (final json in remoteData) {
@@ -516,9 +647,12 @@ class ReportsMapProvider extends ChangeNotifier {
                 seenIds.add(report.id);
               } else {
                 // Update existing marker with fresh data
-                final existingIndex = combinedMarkers.indexWhere((m) => m.id == report.id);
-                if (existingIndex != -1 && !combinedMarkers[existingIndex].isPending) {
-                  combinedMarkers[existingIndex] = MapMarkerData.fromEntity(report);
+                final existingIndex =
+                    combinedMarkers.indexWhere((m) => m.id == report.id);
+                if (existingIndex != -1 &&
+                    !combinedMarkers[existingIndex].isPending) {
+                  combinedMarkers[existingIndex] =
+                      MapMarkerData.fromEntity(report);
                 }
               }
             }
@@ -568,14 +702,16 @@ class ReportsMapProvider extends ChangeNotifier {
       // Update the local marker status immediately
       final index = _markers.indexWhere((m) => m.id == reportId);
       if (index != -1) {
-        _markers[index] = _markers[index].copyWith(status: ReportStatus.resolved);
+        _markers[index] =
+            _markers[index].copyWith(status: ReportStatus.resolved);
         _invalidateFilterCache();
         notifyListeners();
       }
 
       // Update cache as well
       if (_cacheService.isInitialized) {
-        await _cacheService.updateCachedReport(reportId, {'status': 'resolved'});
+        await _cacheService
+            .updateCachedReport(reportId, {'status': 'resolved'});
       }
 
       AppLogger.info('Report $reportId marked as recovered');

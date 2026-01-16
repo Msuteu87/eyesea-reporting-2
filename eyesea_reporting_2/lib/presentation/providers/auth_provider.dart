@@ -9,6 +9,15 @@ import '../../domain/entities/user.dart';
 import '../../domain/repositories/auth_repository.dart';
 import '../../core/utils/logger.dart';
 
+// TODO: [UX] Indicate stale data when using cached profile
+// Current: When offline, cached profile is used but UI doesn't indicate this
+// Fix: Add visual badge/indicator showing "cached data" or last sync time
+
+// TODO: [DESIGN] Async init runs without blocking UI
+// Current: _init() runs async - if fetchCurrentUser() is slow (5+ seconds),
+// user sees splash screen with no feedback
+// Fix: Add loading timeout with retry option, or show skeleton UI
+
 class AuthProvider extends ChangeNotifier {
   final AuthRepository _authRepository;
   final ProfileCacheService _profileCacheService;

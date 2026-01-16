@@ -1,16 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import '../../../core/theme/app_colors.dart';
 import '../../../domain/entities/report.dart';
 
 /// Result from the filter sheet containing both status and user filters
 class LayerFilterResult {
   final Set<ReportStatus> statuses;
   final bool showOnlyMyReports;
+  final bool isHeatmapEnabled; // New
 
   const LayerFilterResult({
     required this.statuses,
     required this.showOnlyMyReports,
+    required this.isHeatmapEnabled,
   });
 }
 
@@ -19,15 +20,19 @@ class LayerFilterResult {
 class LayerFilterSheet extends StatelessWidget {
   final Set<ReportStatus> visibleStatuses;
   final bool showOnlyMyReports;
+  final bool isHeatmapEnabled;
   final ValueChanged<Set<ReportStatus>> onStatusChanged;
   final ValueChanged<bool> onMyReportsChanged;
+  final ValueChanged<bool> onHeatmapChanged;
 
   const LayerFilterSheet({
     super.key,
     required this.visibleStatuses,
     required this.showOnlyMyReports,
+    required this.isHeatmapEnabled,
     required this.onStatusChanged,
     required this.onMyReportsChanged,
+    required this.onHeatmapChanged,
   });
 
   /// Show the filter sheet and return the updated filter result
@@ -35,6 +40,7 @@ class LayerFilterSheet extends StatelessWidget {
     BuildContext context, {
     required Set<ReportStatus> currentStatuses,
     required bool showOnlyMyReports,
+    required bool isHeatmapEnabled,
   }) async {
     return showModalBottomSheet<LayerFilterResult>(
       context: context,
@@ -43,11 +49,13 @@ class LayerFilterSheet extends StatelessWidget {
       builder: (context) {
         Set<ReportStatus> statuses = Set.from(currentStatuses);
         bool myReports = showOnlyMyReports;
+        bool heatmap = isHeatmapEnabled;
         return StatefulBuilder(
           builder: (context, setState) {
             return LayerFilterSheet(
               visibleStatuses: statuses,
               showOnlyMyReports: myReports,
+              isHeatmapEnabled: heatmap,
               onStatusChanged: (newStatuses) {
                 setState(() {
                   statuses = newStatuses;
@@ -56,6 +64,11 @@ class LayerFilterSheet extends StatelessWidget {
               onMyReportsChanged: (value) {
                 setState(() {
                   myReports = value;
+                });
+              },
+              onHeatmapChanged: (value) {
+                setState(() {
+                  heatmap = value;
                 });
               },
             );
@@ -71,17 +84,13 @@ class LayerFilterSheet extends StatelessWidget {
     final bottomPadding = MediaQuery.of(context).viewPadding.bottom;
 
     // Active = pending + verified
-    final showActive = visibleStatuses.contains(ReportStatus.pending) ||
-        visibleStatuses.contains(ReportStatus.verified);
-    // Recovered = resolved
-    final showRecovered = visibleStatuses.contains(ReportStatus.resolved);
-
     // Nav bar is ~90pt + home indicator, add generous spacing above it
     const navBarHeight = 100.0;
     const spacing = 16.0;
 
     return Container(
-      margin: EdgeInsets.fromLTRB(16, 0, 16, bottomPadding + navBarHeight + spacing),
+      margin: EdgeInsets.fromLTRB(
+          16, 0, 16, bottomPadding + navBarHeight + spacing),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF2C2C2E) : Colors.white,
         borderRadius: BorderRadius.circular(14),
@@ -89,82 +98,28 @@ class LayerFilterSheet extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // My Reports toggle (primary filter)
+          // Global Heatmap Toggle
           _CompactToggleRow(
-            label: 'My Reports Only',
-            icon: LucideIcons.user,
-            color: AppColors.electricNavy,
-            value: showOnlyMyReports,
+            label: 'Global Heatmap',
+            icon: LucideIcons.flame, // Fire icon for heatmap
+            color: Colors.orangeAccent,
+            value: isHeatmapEnabled,
             onChanged: (value) {
-              onMyReportsChanged(value);
+              onHeatmapChanged(value);
               Navigator.pop(
                 context,
                 LayerFilterResult(
                   statuses: visibleStatuses,
-                  showOnlyMyReports: value,
-                ),
-              );
-            },
-          ),
-          _buildDivider(isDark),
-          // Active Reports row
-          _CompactToggleRow(
-            label: 'Active Reports',
-            color: const Color(0xFFEF4444), // Red for reported
-            value: showActive,
-            onChanged: (value) {
-              final newStatuses = Set<ReportStatus>.from(visibleStatuses);
-              if (value) {
-                newStatuses.add(ReportStatus.pending);
-                newStatuses.add(ReportStatus.verified);
-              } else {
-                newStatuses.remove(ReportStatus.pending);
-                newStatuses.remove(ReportStatus.verified);
-              }
-              onStatusChanged(newStatuses);
-              Navigator.pop(
-                context,
-                LayerFilterResult(
-                  statuses: newStatuses,
                   showOnlyMyReports: showOnlyMyReports,
+                  isHeatmapEnabled: value,
                 ),
               );
             },
           ),
-          _buildDivider(isDark),
-          // Recovered Reports row
-          _CompactToggleRow(
-            label: 'Recovered Reports',
-            color: AppColors.emerald,
-            value: showRecovered,
-            onChanged: (value) {
-              final newStatuses = Set<ReportStatus>.from(visibleStatuses);
-              if (value) {
-                newStatuses.add(ReportStatus.resolved);
-              } else {
-                newStatuses.remove(ReportStatus.resolved);
-              }
-              onStatusChanged(newStatuses);
-              Navigator.pop(
-                context,
-                LayerFilterResult(
-                  statuses: newStatuses,
-                  showOnlyMyReports: showOnlyMyReports,
-                ),
-              );
-            },
-          ),
+          const SizedBox(
+              height: 8), // Bottom spacing since other items are gone
         ],
       ),
-    );
-  }
-
-  Widget _buildDivider(bool isDark) {
-    return Divider(
-      height: 1,
-      indent: 20,
-      endIndent: 20,
-      color: isDark ? Colors.white12 : Colors.black.withValues(alpha: 0.08),
     );
   }
 }

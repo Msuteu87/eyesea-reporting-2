@@ -4,6 +4,15 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/utils/error_mapper.dart';
 import '../../core/utils/logger.dart';
 
+// TODO: [SECURITY] Validate avatar image before upload
+// Current: No validation of image dimensions, size, or MIME type
+// Risk: Storage abuse with large files, non-image uploads
+// Fix: Validate file size (<5MB), dimensions (<4096x4096), and MIME type
+
+// TODO: [SECURITY] Rate limit auth attempts client-side
+// Current: No client-side rate limiting on signInWithEmailAndPassword
+// Risk: Rapid retry loops on auth failure could trigger server rate limits
+// Fix: Add exponential backoff after 3 failed attempts
 
 /// Data source for authentication operations.
 class AuthDataSource {

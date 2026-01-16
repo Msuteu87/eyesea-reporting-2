@@ -38,6 +38,7 @@
 -- as it's a read-only reference table with no sensitive data.
 
 ALTER TABLE public.pollution_weights ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS pollution_weights_read ON public.pollution_weights;
 CREATE POLICY pollution_weights_read ON public.pollution_weights FOR SELECT USING (true);
 
 -- 1B. Fix location_cache INSERT policy (require authentication)
@@ -108,6 +109,7 @@ CREATE POLICY "Users can delete own reports." ON reports
 -- events policies
 -- Only ambassadors and eyesea_reps can create events
 DROP POLICY IF EXISTS "Ambassadors can create events." ON events;
+DROP POLICY IF EXISTS "Ambassadors and Eyesea reps can create events" ON events;
 CREATE POLICY "Ambassadors and Eyesea reps can create events" ON events
   FOR INSERT WITH CHECK (
     EXISTS (
@@ -119,6 +121,7 @@ CREATE POLICY "Ambassadors and Eyesea reps can create events" ON events
 
 -- Only the organizer (who must be ambassador or eyesea_rep) can update their events
 DROP POLICY IF EXISTS "Ambassadors can update own events." ON events;
+DROP POLICY IF EXISTS "Event organizers can update own events" ON events;
 CREATE POLICY "Event organizers can update own events" ON events
   FOR UPDATE USING (
     (select auth.uid()) = organizer_id
@@ -131,6 +134,7 @@ CREATE POLICY "Event organizers can update own events" ON events
 
 -- Only the organizer can delete their events
 DROP POLICY IF EXISTS "Organizers can delete their events" ON events;
+DROP POLICY IF EXISTS "Event organizers can delete their events" ON events;
 CREATE POLICY "Event organizers can delete their events" ON events
   FOR DELETE USING (
     (select auth.uid()) = organizer_id

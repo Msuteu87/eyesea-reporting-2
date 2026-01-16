@@ -3,6 +3,20 @@ import 'package:ultralytics_yolo/ultralytics_yolo.dart';
 import '../../domain/entities/ai_analysis_result.dart';
 import '../utils/logger.dart';
 
+// TODO: [PRIVACY] Document people detection blocking behavior
+// When peopleDetected > 0, submission is blocked to protect privacy
+// This is intentional - users should not submit photos with people visible
+// Ensure YOLO model updates don't regress this detection capability
+
+// TODO: [PERFORMANCE] Consider lazy model loading
+// Current: Model loaded on first analyze() call and kept in memory
+// Fix: Add explicit loadModel()/unloadModel() for memory management
+// Could unload when app is backgrounded to free ~50MB RAM
+
+// TODO: [MAINTAINABILITY] Move class mappings to config file
+// Current: _pollutionClasses, _ignoreClasses hardcoded here
+// Fix: Load from JSON config to allow updates without app release
+
 /// Service for on-device AI analysis of images using Ultralytics YOLO.
 /// Uses YOLOv8/v11 for object detection with grouping (pollution vs people).
 class AIAnalysisService {

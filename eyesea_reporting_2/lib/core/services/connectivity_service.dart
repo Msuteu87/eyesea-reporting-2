@@ -2,6 +2,16 @@ import 'dart:async';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import '../utils/logger.dart';
 
+// TODO: [EDGE-CASE] Handle initialization before network permission
+// Current: If initialize() is called before permission granted, _isOnline
+// may be incorrect until next connectivity change event
+// Fix: Re-check connectivity after app returns from permission dialog
+
+// TODO: [RELIABILITY] Add actual network reachability check
+// Current: connectivity_plus only checks if network interface is available
+// It doesn't verify actual internet connectivity (could be captive portal)
+// Fix: Ping a known endpoint (e.g., Supabase health check) on status change
+
 /// Service to monitor network connectivity status.
 /// Triggers callbacks when connectivity changes.
 class ConnectivityService {

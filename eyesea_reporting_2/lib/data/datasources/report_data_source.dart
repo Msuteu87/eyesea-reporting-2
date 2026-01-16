@@ -4,6 +4,16 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/errors/exceptions.dart';
 import '../../core/utils/logger.dart';
 
+// TODO: [SECURITY] Validate file size and MIME type before upload
+// Current: No client-side validation before uploading to storage
+// Risk: Users could upload large files (DoS) or non-image files
+// Fix: Check file.lengthSync() < 10MB and validate image headers
+
+// TODO: [SECURITY] Server-side validation for gamification data
+// Current: XP, fraudScore, pollutionCounts sent from client
+// Risk: Malicious client could manipulate these values
+// Fix: Calculate XP/fraud server-side in Supabase function or Edge Function
+
 /// Data source for report CRUD operations.
 class ReportDataSource {
   final SupabaseClient _supabase;
@@ -34,7 +44,8 @@ class ReportDataSource {
   }
 
   /// Attaches image URLs to a list of reports
-  Future<void> _attachImagesToReports(List<Map<String, dynamic>> reports) async {
+  Future<void> _attachImagesToReports(
+      List<Map<String, dynamic>> reports) async {
     for (final report in reports) {
       await _attachImagesToReport(report);
     }
@@ -252,7 +263,6 @@ class ReportDataSource {
     }
   }
 
-  /// Create AI analysis record for a report
   Future<void> createAIAnalysisRecord({
     required String reportId,
     required List<String> sceneLabels,
@@ -271,6 +281,47 @@ class ReportDataSource {
       });
     } catch (e) {
       throw ServerException(message: e.toString());
+    }
+  }
+
+  /// Fetch lightweight heatmap points via RPC (deprecated - use fetchHeatmapGrid)
+  Future<List<Map<String, dynamic>>> fetchHeatmapPoints() async {
+    try {
+      final response = await _supabase.rpc('get_heatmap_points');
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      // If RPC fails or doesn't exist, log warning and return empty
+      AppLogger.warning('Failed to fetch heatmap points: $e');
+      return [];
+    }
+  }
+
+  /// Fetch grid-aggregated heatmap data for global visualization.
+  /// This ensures all regions are represented regardless of report density.
+  /// [cellSize] controls grid resolution: 2.0 for global view, 0.5 for regional.
+  Future<List<Map<String, dynamic>>> fetchHeatmapGrid({
+    required double minLat,
+    required double maxLat,
+    required double minLng,
+    required double maxLng,
+    double cellSize = 2.0,
+  }) async {
+    try {
+      log('[ReportDataSource] Calling get_heatmap_grid with cell_size=$cellSize');
+      final response = await _supabase.rpc('get_heatmap_grid', params: {
+        'min_lng': minLng,
+        'min_lat': minLat,
+        'max_lng': maxLng,
+        'max_lat': maxLat,
+        'cell_size': cellSize,
+      });
+      final results = List<Map<String, dynamic>>.from(response);
+      log('[ReportDataSource] Got ${results.length} grid cells from get_heatmap_grid');
+      return results;
+    } catch (e) {
+      log('[ReportDataSource] get_heatmap_grid failed: $e, falling back to fetchHeatmapPoints');
+      // Fallback to old method if new RPC doesn't exist yet
+      return fetchHeatmapPoints();
     }
   }
 }

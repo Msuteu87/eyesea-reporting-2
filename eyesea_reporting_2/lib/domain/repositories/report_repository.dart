@@ -1,5 +1,6 @@
 import 'dart:io';
 import '../entities/report.dart';
+import '../entities/heatmap_point.dart';
 
 /// Abstract repository for report-related operations.
 abstract class ReportRepository {
@@ -43,4 +44,12 @@ abstract class ReportRepository {
 
   /// Mark a report as recovered (sets status to 'resolved').
   Future<void> markAsRecovered(String reportId);
+
+  /// Fetch lightweight heatmap points within a bounding box.
+  Future<List<HeatmapPoint>> fetchHeatmapPoints({
+    required double minLat,
+    required double maxLat,
+    required double minLng,
+    required double maxLng,
+  });
 }

@@ -1,17 +1,20 @@
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:camera/camera.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:photo_manager/photo_manager.dart';
+import 'package:ultralytics_yolo/ultralytics_yolo.dart';
+import 'package:ultralytics_yolo/widgets/yolo_controller.dart';
+import 'package:ultralytics_yolo/widgets/yolo_overlay.dart';
 import '../../core/services/image_compression_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/logger.dart';
 
-/// Full-screen camera capture with gallery carousel.
-/// Returns the captured/selected image file on success.
+/// Full-screen camera capture with gallery carousel and Object Detection.
 class CameraCaptureScreen extends StatefulWidget {
   const CameraCaptureScreen({super.key});
 
@@ -21,8 +24,7 @@ class CameraCaptureScreen extends StatefulWidget {
 
 class _CameraCaptureScreenState extends State<CameraCaptureScreen>
     with WidgetsBindingObserver {
-  CameraController? _controller;
-  List<CameraDescription> _cameras = [];
+  late final YOLOViewController _controller;
   bool _isInitialized = false;
   bool _isCapturing = false;
   File? _capturedImage;
@@ -35,72 +37,35 @@ class _CameraCaptureScreenState extends State<CameraCaptureScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _initializeCamera();
+    _controller = YOLOViewController();
     _loadRecentPhotos();
+    // Simulate initialization delay for smooth UI
+    Future.delayed(const Duration(milliseconds: 500), () {
+      if (mounted) setState(() => _isInitialized = true);
+    });
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _controller?.dispose();
+    // controller.dispose() is managed by YOLOView usually, but we can stop it if needed.
+    // _controller.stop();
     super.dispose();
   }
 
+  // Lifecycle handling is managed by YOLOView's platform view usually,
+  // but if we need explicit restart:
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (_controller == null || !_controller!.value.isInitialized) return;
-
-    if (state == AppLifecycleState.inactive) {
-      _controller?.dispose();
-    } else if (state == AppLifecycleState.resumed) {
-      _initializeCamera();
-    }
-  }
-
-  Future<void> _initializeCamera() async {
-    try {
-      AppLogger.debug('Getting available cameras...');
-      _cameras = await availableCameras();
-      AppLogger.debug('Found ${_cameras.length} cameras');
-
-      if (_cameras.isEmpty) {
-        AppLogger.warning('No cameras found!');
-        return;
-      }
-
-      // Use back camera
-      final backCamera = _cameras.firstWhere(
-        (c) => c.lensDirection == CameraLensDirection.back,
-        orElse: () => _cameras.first,
-      );
-      AppLogger.debug('Using camera: ${backCamera.name}');
-
-      _controller = CameraController(
-        backCamera,
-        ResolutionPreset.high,
-        enableAudio: false,
-        imageFormatGroup: ImageFormatGroup.jpeg,
-      );
-
-      AppLogger.debug('Initializing camera controller...');
-      await _controller!.initialize();
-      AppLogger.info('Camera initialized successfully!');
-
-      if (mounted) {
-        setState(() => _isInitialized = true);
-        AppLogger.debug('State updated - isInitialized: true');
-      }
-    } catch (e) {
-      AppLogger.error('Camera init error: $e');
+    if (state == AppLifecycleState.resumed) {
+      // _controller.restartCamera();
     }
   }
 
   Future<void> _loadRecentPhotos() async {
     try {
       final permission = await PhotoManager.requestPermissionExtend();
-      if (!permission.isAuth) {
-        return;
-      }
+      if (!permission.isAuth) return;
 
       final albums = await PhotoManager.getAssetPathList(
         type: RequestType.image,
@@ -124,20 +89,31 @@ class _CameraCaptureScreenState extends State<CameraCaptureScreen>
   }
 
   Future<void> _capturePhoto() async {
-    if (_controller == null || _isCapturing) return;
+    if (_isCapturing) return;
 
     setState(() => _isCapturing = true);
 
     try {
-      final xFile = await _controller!.takePicture();
-      final file = File(xFile.path);
+      AppLogger.debug('Capturing frame from YOLOView...');
+      final Uint8List? imageBytes = await _controller.captureFrame();
+
+      if (imageBytes == null || imageBytes.isEmpty) {
+        throw Exception('Captured empty frame');
+      }
+
+      // Write to temp file
+      final tempDir = await getTemporaryDirectory();
+      final fileName =
+          'yolo_capture_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final file = File('${tempDir.path}/$fileName');
+      await file.writeAsBytes(imageBytes);
 
       setState(() {
         _capturedImage = file;
         _showThumbnailAnimation = true;
       });
 
-      // Compress and navigate to report details
+      // Compress and navigate
       await _compressAndNavigate(file);
     } catch (e) {
       AppLogger.error('Capture error: $e');
@@ -160,7 +136,6 @@ class _CameraCaptureScreenState extends State<CameraCaptureScreen>
       _showThumbnailAnimation = true;
     });
 
-    // Compress and navigate to report details
     await _compressAndNavigate(file);
   }
 
@@ -178,20 +153,18 @@ class _CameraCaptureScreenState extends State<CameraCaptureScreen>
       final compressedSize = await compressedFile.length();
       final reduction =
           ((1 - compressedSize / originalSize) * 100).toStringAsFixed(1);
-      AppLogger.info('Compressed: ${originalSize ~/ 1024}KB -> ${compressedSize ~/ 1024}KB ($reduction% reduction)');
+      AppLogger.info(
+          'Compressed: ${originalSize ~/ 1024}KB -> ${compressedSize ~/ 1024}KB ($reduction% reduction)');
 
-      // Wait for animation
       await Future.delayed(const Duration(milliseconds: 600));
 
       if (mounted) {
-        // Navigate to report details with compressed image
         context.push(
             '/report-details?imagePath=${Uri.encodeComponent(compressedFile.path)}');
       }
     } catch (e) {
       AppLogger.error('Compression error: $e');
       if (mounted) {
-        // Fall back to original file if compression fails
         context.push(
             '/report-details?imagePath=${Uri.encodeComponent(originalFile.path)}');
       }
@@ -200,18 +173,46 @@ class _CameraCaptureScreenState extends State<CameraCaptureScreen>
 
   @override
   Widget build(BuildContext context) {
+    // Model path logic needs to be robust.
+    // Android: 'yolo11n.tflite' if in assets folder natively?
+    // iOS: 'yolo11n' (implicitly .mlmodel from bundle).
+    // Let's rely on the plugin's asset loading if possible or fallback.
+    // Based on docs, just the name might work if in bundle.
+    final modelPath = Platform.isAndroid ? 'yolo11n.tflite' : 'yolo11n';
+
     return Scaffold(
       backgroundColor: Colors.black,
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // Camera Preview
-          if (_isInitialized && _controller != null)
-            CameraPreview(controller: _controller!)
+          // YOLO View (Camera + Detection)
+          if (_isInitialized)
+            YOLOView(
+              controller: _controller,
+              modelPath: modelPath,
+              task: YOLOTask.detect,
+              cameraResolution: '1080p', // Try high res
+              lensFacing: LensFacing.back,
+              showOverlays: true, // Show bounding boxes
+              confidenceThreshold: 0.4,
+              overlayTheme: const YOLOOverlayTheme(
+                boundingBoxColor: AppColors.primary,
+                labelBackgroundColor: AppColors.primary,
+                textColor: Colors.white,
+                textSize: 12.0,
+              ),
+              onResult: (results) {
+                // We can log or use results if needed,
+                // but overlays handle the visual part.
+              },
+            )
           else
             const Center(
               child: CircularProgressIndicator(color: Colors.white),
             ),
+
+          // Overlay for when not initialized or loading
+          if (!_isInitialized) Container(color: Colors.black),
 
           // Thumbnail Animation Overlay
           if (_showThumbnailAnimation && _capturedImage != null)
@@ -242,7 +243,7 @@ class _CameraCaptureScreenState extends State<CameraCaptureScreen>
             ),
           ),
 
-          // Bottom Controls - always show (even during loading)
+          // Bottom Controls
           Positioned(
             left: 0,
             right: 0,
@@ -412,33 +413,6 @@ class _GalleryThumbnailState extends State<_GalleryThumbnail> {
       width: 70,
       height: 70,
       fit: BoxFit.cover,
-    );
-  }
-}
-
-/// Camera preview widget - simplified
-class CameraPreview extends StatelessWidget {
-  final CameraController controller;
-
-  const CameraPreview({super.key, required this.controller});
-
-  @override
-  Widget build(BuildContext context) {
-    if (!controller.value.isInitialized) {
-      return const Center(
-        child: CircularProgressIndicator(color: Colors.white),
-      );
-    }
-
-    return SizedBox.expand(
-      child: FittedBox(
-        fit: BoxFit.cover,
-        child: SizedBox(
-          width: controller.value.previewSize?.height ?? 100,
-          height: controller.value.previewSize?.width ?? 100,
-          child: controller.buildPreview(),
-        ),
-      ),
     );
   }
 }

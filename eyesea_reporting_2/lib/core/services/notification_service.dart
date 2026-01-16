@@ -6,6 +6,15 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../utils/logger.dart';
 
+// TODO: [SCALABILITY] Unbounded notification list growth
+// Current: _notifications list accumulates all loaded notifications
+// Fix: Cap list at 100 items, implement pagination for older notifications
+
+// TODO: [FEATURE] Add notification tap navigation
+// Current: _onNotificationTapped logs but doesn't navigate
+// Fix: Parse payload, use GoRouter to navigate to relevant screen
+// (e.g., report details, badge earned, event details)
+
 /// Notification model matching the database schema
 class AppNotification {
   final String id;

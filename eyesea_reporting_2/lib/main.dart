@@ -1,3 +1,17 @@
+// TODO: [SCALABILITY] Consider using GetIt service locator for DI
+// Current: 185+ lines of manual dependency injection
+// Problems:
+// - Hard to test (difficult to mock dependencies)
+// - Hard to swap implementations (e.g., different cache backends)
+// - No lazy initialization (all services created at startup)
+// Fix: Use GetIt package for service registration with lazy singletons
+// Example: getIt.registerLazySingleton<ConnectivityService>(() => ...)
+
+// TODO: [SCALABILITY] Avoid ChangeNotifierProvider.value() anti-pattern
+// Current: Uses .value() which doesn't manage provider lifecycle
+// Risk: If provider created in one context and used in another, state mismatches
+// Fix: Use create: with proper lifecycle management for better memory handling
+
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';

@@ -5,6 +5,16 @@ import 'package:hive_flutter/hive_flutter.dart';
 import '../utils/logger.dart';
 import 'secure_storage_service.dart';
 
+// TODO: [CACHE-COHERENCY] Replace time-based expiry with event-driven invalidation
+// Current: 24-hour cache expiry (_cacheExpiry) is arbitrary
+// Problem: Resolved reports may show as pending for up to 24 hours
+// Fix: Subscribe to realtime report status changes or use shorter expiry (1hr)
+
+// TODO: [SCALABILITY] 10,000 report cap may be insufficient
+// Current: _maxCachedReports = 10000 with LRU eviction
+// Consider: For global view, might need geographic partitioning instead
+// (e.g., cache by region/grid cell, evict entire regions)
+
 /// Service for caching remote reports locally using encrypted Hive storage.
 /// Supports delta sync via timestamps and LRU eviction when cache is full.
 class ReportCacheService {

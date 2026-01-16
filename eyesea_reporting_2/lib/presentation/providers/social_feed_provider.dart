@@ -9,6 +9,18 @@ import '../../domain/repositories/social_feed_repository.dart';
 /// Filter options for the social feed
 enum FeedFilter { nearby, country, city, world }
 
+// TODO: [SCALABILITY] Unbounded list growth issue
+// Current implementation: _items = [..._items, ...newItems] grows indefinitely
+// At 5000 users: Heavy scrollers accumulate GBs of data → OOM crash
+// Fix: Implement memory cap (e.g., keep last 100 items) or use cursor-based
+// pagination with windowed list that discards items outside the viewport.
+// See: https://api.flutter.dev/flutter/widgets/ListView/ListView.builder.html
+
+// TODO: [SCALABILITY] Replace offset pagination with cursor-based pagination
+// Current: Uses _currentOffset which is slow on large datasets (DB must skip N rows)
+// Fix: Use cursor (e.g., last item's ID or timestamp) for efficient keyset pagination
+// Example: fetchFeed(cursor: lastItem.id, limit: 20) instead of offset
+
 /// Provider for managing social feed state with automatic proximity-first filtering
 class SocialFeedProvider extends ChangeNotifier {
   final SocialFeedRepository _repository;

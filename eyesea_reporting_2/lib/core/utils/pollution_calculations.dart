@@ -1,5 +1,25 @@
 import '../../domain/entities/report.dart';
 
+// TODO: [DOCUMENTATION] Add player-facing explanation of XP system
+// Current: XP calculation has base + bonuses but no in-app explanation
+// Fix: Create wiki/help screen explaining how XP is earned:
+//   - Base: 25 XP per report
+//   - Photo bonus: +5 XP
+//   - Location bonus: +10 XP
+//   - Beach/water bonus: +10 XP
+//   - Severity bonus: 0-20 XP based on severity level
+//   - Multi-type bonus: +5 XP per additional pollution type
+//   - Item count bonus: +1 XP per 5 items (capped at 50 XP)
+
+// TODO: [MAINTAINABILITY] Move weight constants to config/database
+// Current: _averageWeights hardcoded - can't adjust based on real data
+// Fix: Store in Supabase config table, cache locally, allow admin updates
+
+// TODO: [VALIDATION] Handle user-adjusted counts vs AI detection
+// Current: If user manually adjusts pollution counts after AI detection,
+// fraud score will flag as suspicious (count mismatch)
+// Consider: Add UI warning when user deviates significantly from AI counts
+
 /// Fraud detection result
 class FraudAnalysis {
   final bool isSuspicious;
