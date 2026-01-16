@@ -6,10 +6,12 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:provider/provider.dart';
 import '../../../core/services/geocoding_service.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../domain/entities/report.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/reports_map_provider.dart';
 
-/// Floating search bar with user avatar for Google Maps-like UX.
-/// Contains a location search field and navigates to profile on avatar tap.
+/// Floating search bar with integrated filter button for Google Maps-like UX.
+/// Contains a location search field, filter toggle, and user avatar.
 class MapSearchBar extends StatefulWidget {
   /// Callback when a location is selected from search results.
   /// Returns [latitude, longitude] coordinates.
@@ -24,17 +26,47 @@ class MapSearchBar extends StatefulWidget {
   State<MapSearchBar> createState() => _MapSearchBarState();
 }
 
-class _MapSearchBarState extends State<MapSearchBar> {
+class _MapSearchBarState extends State<MapSearchBar>
+    with SingleTickerProviderStateMixin {
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _focusNode = FocusNode();
   bool _isSearching = false;
   List<GeocodingResult> _searchResults = [];
+  bool _filtersExpanded = false;
+
+  late AnimationController _filterAnimationController;
+  late Animation<double> _filterExpandAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _filterAnimationController = AnimationController(
+      duration: const Duration(milliseconds: 250),
+      vsync: this,
+    );
+    _filterExpandAnimation = CurvedAnimation(
+      parent: _filterAnimationController,
+      curve: Curves.easeOutCubic,
+    );
+  }
 
   @override
   void dispose() {
     _searchController.dispose();
     _focusNode.dispose();
+    _filterAnimationController.dispose();
     super.dispose();
+  }
+
+  void _toggleFilters() {
+    setState(() {
+      _filtersExpanded = !_filtersExpanded;
+      if (_filtersExpanded) {
+        _filterAnimationController.forward();
+      } else {
+        _filterAnimationController.reverse();
+      }
+    });
   }
 
   Future<void> _performSearch(String query) async {
@@ -87,11 +119,110 @@ class _MapSearchBarState extends State<MapSearchBar> {
     setState(() => _searchResults = []);
   }
 
+  Widget _buildFilterChips(
+      BuildContext context, ReportsMapProvider provider, bool isDark) {
+    final visibleStatuses = provider.visibleStatuses;
+    final isMyReports = provider.showOnlyMyReports;
+    final isActiveSelected = visibleStatuses.contains(ReportStatus.pending) ||
+        visibleStatuses.contains(ReportStatus.verified);
+    final isRecoveredSelected = visibleStatuses.contains(ReportStatus.resolved);
+
+    return Container(
+      margin: const EdgeInsets.only(top: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+      decoration: BoxDecoration(
+        color: isDark
+            ? Colors.grey[900]!.withValues(alpha: 0.9)
+            : Colors.white.withValues(alpha: 0.95),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.1),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          // My Reports Chip
+          _FilterChip(
+            label: 'My Reports',
+            icon: LucideIcons.user,
+            isSelected: isMyReports,
+            selectedColor: AppColors.electricNavy,
+            isDark: isDark,
+            onTap: () => provider.setShowOnlyMyReports(!isMyReports),
+          ),
+          const SizedBox(width: 8),
+
+          // Active Reports Chip
+          _FilterChip(
+            label: 'Active',
+            icon: LucideIcons.alertCircle,
+            isSelected: isActiveSelected,
+            selectedColor: const Color(0xFFEF4444),
+            isDark: isDark,
+            onTap: () {
+              final newStatuses = Set<ReportStatus>.from(visibleStatuses);
+              if (isActiveSelected) {
+                newStatuses.remove(ReportStatus.pending);
+                newStatuses.remove(ReportStatus.verified);
+              } else {
+                newStatuses.add(ReportStatus.pending);
+                newStatuses.add(ReportStatus.verified);
+              }
+              provider.setVisibleStatuses(newStatuses);
+            },
+          ),
+          const SizedBox(width: 8),
+
+          // Recovered Reports Chip
+          _FilterChip(
+            label: 'Recovered',
+            icon: LucideIcons.checkCircle2,
+            isSelected: isRecoveredSelected,
+            selectedColor: AppColors.emerald,
+            isDark: isDark,
+            onTap: () {
+              final newStatuses = Set<ReportStatus>.from(visibleStatuses);
+              if (isRecoveredSelected) {
+                newStatuses.remove(ReportStatus.resolved);
+              } else {
+                newStatuses.add(ReportStatus.resolved);
+              }
+              provider.setVisibleStatuses(newStatuses);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Count of active filters for badge display
+  int _getActiveFilterCount(ReportsMapProvider provider) {
+    int count = 0;
+    if (provider.showOnlyMyReports) count++;
+    // Check if not showing all statuses (default is all active)
+    final visibleStatuses = provider.visibleStatuses;
+    final hasActive = visibleStatuses.contains(ReportStatus.pending) ||
+        visibleStatuses.contains(ReportStatus.verified);
+    final hasRecovered = visibleStatuses.contains(ReportStatus.resolved);
+    // Count as active filter if either is toggled off from default
+    if (!hasActive) count++;
+    if (hasRecovered) count++; // Recovered is off by default, so count when on
+    return count;
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = context.watch<AuthProvider>().currentUser;
+    final provider = context.watch<ReportsMapProvider>();
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final activeFilterCount = _getActiveFilterCount(provider);
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -185,6 +316,61 @@ class _MapSearchBarState extends State<MapSearchBar> {
                       ),
                     ),
 
+                  // Filter button with badge
+                  GestureDetector(
+                    onTap: _toggleFilters,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: _filtersExpanded
+                                  ? AppColors.oceanBlue.withValues(alpha: 0.15)
+                                  : Colors.transparent,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Icon(
+                              LucideIcons.slidersHorizontal,
+                              color: _filtersExpanded
+                                  ? AppColors.oceanBlue
+                                  : Colors.grey[500],
+                              size: 18,
+                            ),
+                          ),
+                          // Badge showing active filter count
+                          if (activeFilterCount > 0)
+                            Positioned(
+                              right: -2,
+                              top: -2,
+                              child: Container(
+                                padding: const EdgeInsets.all(4),
+                                decoration: const BoxDecoration(
+                                  color: AppColors.oceanBlue,
+                                  shape: BoxShape.circle,
+                                ),
+                                constraints: const BoxConstraints(
+                                  minWidth: 16,
+                                  minHeight: 16,
+                                ),
+                                child: Text(
+                                  '$activeFilterCount',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+
                   // Divider
                   Container(
                     width: 1,
@@ -204,6 +390,13 @@ class _MapSearchBarState extends State<MapSearchBar> {
               ),
             ),
           ),
+        ),
+
+        // Expandable filter chips panel
+        SizeTransition(
+          sizeFactor: _filterExpandAnimation,
+          axisAlignment: -1,
+          child: _buildFilterChips(context, provider, isDark),
         ),
 
         // Search results dropdown
@@ -330,6 +523,72 @@ class _MapSearchBarState extends State<MapSearchBar> {
               ),
             );
           },
+        ),
+      ),
+    );
+  }
+}
+
+/// Compact filter chip for the expandable filter panel
+class _FilterChip extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool isSelected;
+  final Color selectedColor;
+  final bool isDark;
+  final VoidCallback onTap;
+
+  const _FilterChip({
+    required this.label,
+    required this.icon,
+    required this.isSelected,
+    required this.selectedColor,
+    required this.isDark,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? selectedColor
+              : (isDark ? const Color(0xFF2C2C2E) : Colors.grey[100]),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected
+                ? selectedColor
+                : (isDark
+                    ? Colors.white10
+                    : Colors.black.withValues(alpha: 0.08)),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 14,
+              color: isSelected
+                  ? Colors.white
+                  : (isDark ? Colors.white70 : Colors.black54),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: isSelected
+                    ? Colors.white
+                    : (isDark ? Colors.white : Colors.black87),
+              ),
+            ),
+          ],
         ),
       ),
     );

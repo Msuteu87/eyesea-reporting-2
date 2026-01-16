@@ -25,7 +25,6 @@ import 'helpers/map_tap_handler.dart';
 import 'helpers/viewport_bounds.dart';
 import 'widgets/layer_filter_fab.dart';
 import 'widgets/layer_filter_sheet.dart';
-import 'widgets/home_filter_bar.dart';
 import 'widgets/map_search_bar.dart';
 import 'widgets/my_location_fab.dart';
 import 'widgets/report_detail_card.dart';
@@ -427,6 +426,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         final currentBounds =
             await MapBoundsHelper.getViewportBounds(_mapboxMap!);
 
+        // Re-check mounted after async gap before using context
+        if (!mounted) return;
+
         final provider = context.read<ReportsMapProvider>();
 
         if (provider.isHeatmapEnabled) {
@@ -546,21 +548,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             ),
           ),
 
-          // Filter Chips (below search bar)
-          Positioned(
-            top: MediaQuery.of(context).padding.top + 80,
-            left: 0,
-            right: 0,
-            child: const HomeFilterBar(),
-          ),
-
           // "Search this area" button (appears when user pans to new area)
           AnimatedPositioned(
             duration: const Duration(milliseconds: 200),
             curve: Curves.easeOutCubic,
             top: _showSearchAreaButton
-                ? MediaQuery.of(context).padding.top + 72
-                : MediaQuery.of(context).padding.top + 40,
+                ? MediaQuery.of(context).padding.top + 80
+                : MediaQuery.of(context).padding.top + 50,
             left: 0,
             right: 0,
             child: AnimatedOpacity(

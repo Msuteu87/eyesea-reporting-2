@@ -2,12 +2,10 @@ import 'dart:developer';
 import 'dart:io';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/errors/exceptions.dart';
+import '../../core/services/image_validation_service.dart';
 import '../../core/utils/logger.dart';
 
-// TODO: [SECURITY] Validate file size and MIME type before upload
-// Current: No client-side validation before uploading to storage
-// Risk: Users could upload large files (DoS) or non-image files
-// Fix: Check file.lengthSync() < 10MB and validate image headers
+// NOTE: Image upload validation (size/MIME type) implemented via ImageValidationService
 
 // TODO: [SECURITY] Server-side validation for gamification data
 // Current: XP, fraudScore, pollutionCounts sent from client
@@ -240,6 +238,12 @@ class ReportDataSource {
 
   Future<String> uploadReportImage(
       String userId, String reportId, File imageFile) async {
+    // Validate image before upload (size and MIME type)
+    final validation = ImageValidationService.validateReportImage(imageFile);
+    if (!validation.isValid) {
+      throw ValidationException(message: validation.errorMessage!);
+    }
+
     final fileName = '${DateTime.now().toIso8601String()}.jpg';
     final path = '$userId/$reportId/$fileName';
 

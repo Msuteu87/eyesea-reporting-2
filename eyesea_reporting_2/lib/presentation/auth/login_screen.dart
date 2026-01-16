@@ -10,6 +10,11 @@ import '../../core/theme/app_colors.dart';
 import '../../core/utils/validators.dart';
 import '../providers/auth_provider.dart';
 
+// TODO: [FEATURE] SSO Authentication - Pending Implementation
+// - Google Sign In: Configure OAuth in Supabase dashboard, add google_sign_in package
+// - Apple Sign In: Configure OAuth in Supabase, add sign_in_with_apple package
+// - LinkedIn Sign In: Configure OAuth in Supabase dashboard
+
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -22,6 +27,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
+  bool _isResettingPassword = false;
 
   @override
   void dispose() {
@@ -62,15 +68,57 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  Future<void> _handleSSO() async {
+  Future<void> _handleForgotPassword() async {
+    final email = _emailController.text.trim();
+
+    // Validate email before sending reset
+    if (email.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter your email address first.'),
+          backgroundColor: AppColors.warning,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    final emailError = Validators.validateEmail(email);
+    if (emailError != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(emailError),
+          backgroundColor: AppColors.warning,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isResettingPassword = true);
+
     try {
-      await context.read<AuthProvider>().signInWithOAuth(OAuthProvider.google);
+      await Supabase.instance.client.auth.resetPasswordForEmail(
+        email,
+        redirectTo: 'io.supabase.eyesea://reset-callback',
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Password reset email sent to $email'),
+            backgroundColor: Theme.of(context).colorScheme.primary,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     } on AuthException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(e.message),
             backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
           ),
         );
       }
@@ -78,10 +126,15 @@ class _LoginScreenState extends State<LoginScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Sign in failed. Please try again.'),
+            content: Text('Failed to send reset email. Please try again.'),
             backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
           ),
         );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isResettingPassword = false);
       }
     }
   }
@@ -217,13 +270,35 @@ class _LoginScreenState extends State<LoginScreen> {
                                           minLength: 6),
                                 ),
 
-                                // TODO: [FEATURE] Implement forgot password feature
-                                // - Add "Forgot Password?" link aligned to the right
-                                // - Navigate to password reset screen or show dialog
-                                // - Use Supabase resetPasswordForEmail() method
-                                // - Handle success/error states with snackbar feedback
+                                const SizedBox(height: 8),
 
-                                const SizedBox(height: 20),
+                                // Forgot Password Link
+                                Align(
+                                  alignment: Alignment.centerRight,
+                                  child: GestureDetector(
+                                    onTap: _isResettingPassword
+                                        ? null
+                                        : _handleForgotPassword,
+                                    child: _isResettingPassword
+                                        ? const SizedBox(
+                                            height: 16,
+                                            width: 16,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                            ),
+                                          )
+                                        : Text(
+                                            'Forgot Password?',
+                                            style: TextStyle(
+                                              fontFamily: 'Roboto',
+                                              fontSize: 13,
+                                              color: primaryColor,
+                                            ),
+                                          ),
+                                  ),
+                                ),
+
+                                const SizedBox(height: 16),
                                 FilledButton(
                                   onPressed:
                                       context.watch<AuthProvider>().isLoading
@@ -279,113 +354,6 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           ),
                         ),
-                      ),
-
-                      const SizedBox(height: 16),
-
-                      // SSO Buttons Row - Google, Apple (TODO), LinkedIn (TODO)
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          // Google SSO Button
-                          InkWell(
-                            onTap: () {
-                              _handleSSO();
-                            },
-                            borderRadius: BorderRadius.circular(30),
-                            child: Container(
-                              height: 60,
-                              width: 60,
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                shape: BoxShape.circle,
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withValues(alpha: 0.1),
-                                    blurRadius: 8,
-                                    offset: const Offset(0, 2),
-                                  ),
-                                ],
-                              ),
-                              padding: const EdgeInsets.all(12),
-                              child: Image.asset(
-                                'assets/images/google_logo.png',
-                                fit: BoxFit.contain,
-                              ),
-                            ),
-                          ),
-
-                          const SizedBox(width: 20),
-
-                          // Apple SSO Button - TODO: Implement Apple Sign In
-                          InkWell(
-                            onTap: () {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Apple Sign In coming soon!'),
-                                ),
-                              );
-                            },
-                            borderRadius: BorderRadius.circular(30),
-                            child: Container(
-                              height: 60,
-                              width: 60,
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                shape: BoxShape.circle,
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withValues(alpha: 0.1),
-                                    blurRadius: 8,
-                                    offset: const Offset(0, 2),
-                                  ),
-                                ],
-                              ),
-                              padding: const EdgeInsets.all(14),
-                              child: const Icon(
-                                Icons.apple,
-                                size: 32,
-                                color: Colors.black,
-                              ),
-                            ),
-                          ),
-
-                          const SizedBox(width: 20),
-
-                          // LinkedIn SSO Button - TODO: Implement LinkedIn Sign In
-                          InkWell(
-                            onTap: () {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content:
-                                      Text('LinkedIn Sign In coming soon!'),
-                                ),
-                              );
-                            },
-                            borderRadius: BorderRadius.circular(30),
-                            child: Container(
-                              height: 60,
-                              width: 60,
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                shape: BoxShape.circle,
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withValues(alpha: 0.1),
-                                    blurRadius: 8,
-                                    offset: const Offset(0, 2),
-                                  ),
-                                ],
-                              ),
-                              padding: const EdgeInsets.all(14),
-                              child: const Icon(
-                                Icons.link, // LinkedIn icon placeholder
-                                size: 32,
-                                color: Color(0xFF0A66C2), // LinkedIn blue
-                              ),
-                            ),
-                          ),
-                        ],
                       ),
                     ],
                   ),

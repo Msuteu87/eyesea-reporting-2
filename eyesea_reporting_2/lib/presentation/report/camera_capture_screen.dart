@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -7,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:photo_manager/photo_manager.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:ultralytics_yolo/ultralytics_yolo.dart';
 import 'package:ultralytics_yolo/widgets/yolo_controller.dart';
 import 'package:ultralytics_yolo/widgets/yolo_overlay.dart';
@@ -30,6 +30,10 @@ class _CameraCaptureScreenState extends State<CameraCaptureScreen>
   File? _capturedImage;
   bool _showThumbnailAnimation = false;
 
+  // Expert mode (bounding boxes visibility)
+  bool _showBoundingBoxes = false;
+  static const String _expertModeKey = 'expert_mode_enabled';
+
   // Gallery carousel
   List<AssetEntity> _recentPhotos = [];
 
@@ -39,10 +43,19 @@ class _CameraCaptureScreenState extends State<CameraCaptureScreen>
     WidgetsBinding.instance.addObserver(this);
     _controller = YOLOViewController();
     _loadRecentPhotos();
+    _loadExpertModePreference();
     // Simulate initialization delay for smooth UI
     Future.delayed(const Duration(milliseconds: 500), () {
       if (mounted) setState(() => _isInitialized = true);
     });
+  }
+
+  Future<void> _loadExpertModePreference() async {
+    final prefs = await SharedPreferences.getInstance();
+    final expertMode = prefs.getBool(_expertModeKey) ?? false;
+    if (mounted) {
+      setState(() => _showBoundingBoxes = expertMode);
+    }
   }
 
   @override
@@ -193,7 +206,7 @@ class _CameraCaptureScreenState extends State<CameraCaptureScreen>
               task: YOLOTask.detect,
               cameraResolution: '1080p', // Try high res
               lensFacing: LensFacing.back,
-              showOverlays: true, // Show bounding boxes
+              showOverlays: _showBoundingBoxes, // Expert mode: show bounding boxes
               confidenceThreshold: 0.4,
               overlayTheme: const YOLOOverlayTheme(
                 boundingBoxColor: AppColors.primary,

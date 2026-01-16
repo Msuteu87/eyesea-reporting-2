@@ -24,6 +24,10 @@ class _SettingsTabState extends State<SettingsTab> {
   bool _notificationsEnabled = false;
   bool _isCheckingNotifications = true;
 
+  // Expert Mode (bounding boxes on camera)
+  bool _expertModeEnabled = false;
+  static const String _expertModeKey = 'expert_mode_enabled';
+
   late NotificationService _notificationService;
 
   @override
@@ -39,6 +43,9 @@ class _SettingsTabState extends State<SettingsTab> {
     // Load theme preference
     final themeModeIndex = prefs.getInt('theme_mode') ?? 0;
     _themeMode = ThemeMode.values[themeModeIndex];
+
+    // Load expert mode preference
+    _expertModeEnabled = prefs.getBool(_expertModeKey) ?? false;
 
     // Check notification permission
     await _checkNotificationPermission();
@@ -99,6 +106,12 @@ class _SettingsTabState extends State<SettingsTab> {
         );
       }
     }
+  }
+
+  Future<void> _toggleExpertMode(bool enabled) async {
+    setState(() => _expertModeEnabled = enabled);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_expertModeKey, enabled);
   }
 
   Future<void> _handleChangePassword() async {
@@ -321,6 +334,25 @@ class _SettingsTabState extends State<SettingsTab> {
             ),
           ],
         ).animate().fadeIn(delay: 250.ms).slideX(begin: 0.1),
+
+        const SizedBox(height: 24),
+
+        // Advanced Section (Expert Mode)
+        _buildSectionHeader(context, 'Advanced', LucideIcons.settings2),
+        const SizedBox(height: 12),
+        _buildSettingsCard(
+          context,
+          children: [
+            _buildSwitchTile(
+              context,
+              title: 'Expert Mode',
+              subtitle: 'Show AI detection boxes on camera',
+              icon: LucideIcons.scanLine,
+              value: _expertModeEnabled,
+              onChanged: _toggleExpertMode,
+            ),
+          ],
+        ).animate().fadeIn(delay: 300.ms).slideX(begin: 0.1),
 
         const SizedBox(height: 32),
 

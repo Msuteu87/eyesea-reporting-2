@@ -1,29 +1,37 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../core/errors/exceptions.dart';
+import '../../core/services/auth_rate_limiter.dart';
+import '../../core/services/image_validation_service.dart';
 import '../../core/utils/error_mapper.dart';
 import '../../core/utils/logger.dart';
 
-// TODO: [SECURITY] Validate avatar image before upload
-// Current: No validation of image dimensions, size, or MIME type
-// Risk: Storage abuse with large files, non-image uploads
-// Fix: Validate file size (<5MB), dimensions (<4096x4096), and MIME type
-
-// TODO: [SECURITY] Rate limit auth attempts client-side
-// Current: No client-side rate limiting on signInWithEmailAndPassword
-// Risk: Rapid retry loops on auth failure could trigger server rate limits
-// Fix: Add exponential backoff after 3 failed attempts
+// NOTE: Avatar upload validation (size/MIME type) implemented via ImageValidationService
+// NOTE: Auth rate limiting implemented via AuthRateLimiter (exponential backoff)
 
 /// Data source for authentication operations.
 class AuthDataSource {
   final SupabaseClient _supabase;
+  final AuthRateLimiter _rateLimiter = AuthRateLimiter();
 
   AuthDataSource(this._supabase);
 
+  /// Check if auth is currently rate limited
+  bool get isRateLimited => _rateLimiter.isLockedOut;
+
+  /// Time remaining until rate limit expires
+  Duration get rateLimitRemaining => _rateLimiter.lockoutRemaining;
+
   Future<void> signInWithEmailAndPassword(String email, String password) async {
+    // Check rate limit before attempting
+    await _rateLimiter.checkAndWait();
+
     try {
       await _supabase.auth.signInWithPassword(email: email, password: password);
+      _rateLimiter.recordSuccess();
     } catch (e, stackTrace) {
+      _rateLimiter.recordFailure();
       throw ErrorMapper.mapAuthError(e, stackTrace);
     }
   }
@@ -39,6 +47,7 @@ class AuthDataSource {
   Future<void> signOut() async {
     try {
       await _supabase.auth.signOut();
+      _rateLimiter.reset(); // Clear rate limit state on logout
     } catch (e, stackTrace) {
       throw ErrorMapper.mapAuthError(e, stackTrace);
     }
@@ -98,8 +107,14 @@ class AuthDataSource {
   }
 
   Future<String> uploadAvatar(String userId, File imageFile) async {
+    // Validate image before upload (size and MIME type)
+    final validation = ImageValidationService.validateAvatarImage(imageFile);
+    if (!validation.isValid) {
+      throw ValidationException(message: validation.errorMessage!);
+    }
+
     try {
-      final fileSize = await imageFile.length();
+      final fileSize = imageFile.lengthSync();
       final fileName = '${DateTime.now().millisecondsSinceEpoch}.jpg';
       final path = '$userId/$fileName';
 
