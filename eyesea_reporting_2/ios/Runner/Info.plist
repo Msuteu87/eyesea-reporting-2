@@ -4,6 +4,8 @@
 <dict>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
@@ -37,11 +39,15 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>UIRequiresFullScreen</key>
+	<true/>
 	<key>MBXAccessToken</key>
 	<string>$(MAPBOX_ACCESS_TOKEN)</string>
 	<key>NSCameraUsageDescription</key>
 	<string>We need camera access to let you capture evidence of pollution.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>We need your location to map where the pollution is reported.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>We need your location to map where the pollution is reported.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>We need photo library access to upload evidence from your gallery.</string>
