@@ -46,7 +46,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.eyesea.eyesea_reporting_2"
+        applicationId = "com.mariussuteu.trashapp"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutterVersionCode.toInteger()
