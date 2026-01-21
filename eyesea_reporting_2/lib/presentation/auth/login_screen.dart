@@ -100,7 +100,7 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       await Supabase.instance.client.auth.resetPasswordForEmail(
         email,
-        redirectTo: 'io.supabase.eyesea://reset-callback',
+        redirectTo: 'com.mariussuteu.eyesea.eyeseareporting://reset-callback',
       );
 
       if (mounted) {

@@ -61,7 +61,7 @@ class AuthDataSource {
     try {
       await _supabase.auth.signInWithOAuth(
         provider,
-        redirectTo: kIsWeb ? null : 'io.supabase.eyesea://login-callback',
+        redirectTo: kIsWeb ? null : 'com.mariussuteu.eyesea.eyeseareporting://login-callback',
       );
     } catch (e, stackTrace) {
       throw ErrorMapper.mapAuthError(e, stackTrace);

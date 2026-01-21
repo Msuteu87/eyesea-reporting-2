@@ -18,6 +18,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'app.dart';
 import 'core/secrets.dart';
 import 'core/utils/logger.dart';
@@ -57,6 +58,14 @@ import 'presentation/providers/leaderboard_provider.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // Load environment variables from .env file
+  try {
+    await dotenv.load(fileName: '.env');
+    AppLogger.info('Environment variables loaded from .env');
+  } catch (e) {
+    AppLogger.warning('Failed to load .env file: $e. Using environment variables or defaults.');
+  }
+
   // Lock orientation to portrait mode for consistent UX
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
@@ -68,18 +77,17 @@ Future<void> main() async {
   AppLogger.info('Hive initialized');
 
   // Set Mapbox access token programmatically (required for Android)
-  MapboxOptions.setAccessToken(Secrets.mapboxAccessToken);
-  AppLogger.info('Mapbox access token configured');
+  final mapboxToken = Secrets.mapboxAccessToken;
+  if (mapboxToken.isNotEmpty) {
+    MapboxOptions.setAccessToken(mapboxToken);
+    AppLogger.info('Mapbox access token configured');
+  } else {
+    AppLogger.warning('Mapbox access token not found. Maps may not work.');
+  }
 
-  // Prefer environment variables from command line, fallback to Secrets file
-  const supabaseUrlEnv = String.fromEnvironment('SUPABASE_URL');
-  const supabaseAnonKeyEnv = String.fromEnvironment('SUPABASE_ANON_KEY');
-
-  final supabaseUrl =
-      supabaseUrlEnv.isNotEmpty ? supabaseUrlEnv : Secrets.supabaseUrl;
-  final supabaseAnonKey = supabaseAnonKeyEnv.isNotEmpty
-      ? supabaseAnonKeyEnv
-      : Secrets.supabaseAnonKey;
+  // Load Supabase credentials from Secrets (which reads from .env or environment)
+  final supabaseUrl = Secrets.supabaseUrl;
+  final supabaseAnonKey = Secrets.supabaseAnonKey;
 
   if (supabaseUrl.isNotEmpty && supabaseAnonKey.isNotEmpty) {
     try {

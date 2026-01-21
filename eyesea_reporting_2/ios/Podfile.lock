@@ -37,21 +37,18 @@ PODS:
   - Mantle (2.2.0):
     - Mantle/extobjc (= 2.2.0)
   - Mantle/extobjc (2.2.0)
-  - mapbox_maps_flutter (2.17.0):
+  - mapbox_maps_flutter (2.18.0):
     - Flutter
-    - MapboxMaps (= 11.17.0)
+    - MapboxMaps (= 11.18.0)
     - Turf (= 4.0.0)
-  - MapboxCommon (24.17.0):
+  - MapboxCommon (24.18.0):
     - Turf (= 4.0.0)
-  - MapboxCoreMaps (11.17.0):
-    - MapboxCommon (= 24.17.0)
-  - MapboxMaps (11.17.0):
-    - MapboxCommon (= 24.17.0)
-    - MapboxCoreMaps (= 11.17.0)
+  - MapboxCoreMaps (11.18.0):
+    - MapboxCommon (= 24.18.0)
+  - MapboxMaps (11.18.0):
+    - MapboxCommon (= 24.18.0)
+    - MapboxCoreMaps (= 11.18.0)
     - Turf (= 4.0.0)
-  - path_provider_foundation (0.0.1):
-    - Flutter
-    - FlutterMacOS
   - permission_handler_apple (9.3.0):
     - Flutter
   - photo_manager (3.8.3):
@@ -84,7 +81,6 @@ DEPENDENCIES:
   - geolocator_apple (from `.symlinks/plugins/geolocator_apple/darwin`)
   - image_picker_ios (from `.symlinks/plugins/image_picker_ios/ios`)
   - mapbox_maps_flutter (from `.symlinks/plugins/mapbox_maps_flutter/ios`)
-  - path_provider_foundation (from `.symlinks/plugins/path_provider_foundation/darwin`)
   - permission_handler_apple (from `.symlinks/plugins/permission_handler_apple/ios`)
   - photo_manager (from `.symlinks/plugins/photo_manager/darwin`)
   - shared_preferences_foundation (from `.symlinks/plugins/shared_preferences_foundation/darwin`)
@@ -125,8 +121,6 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/image_picker_ios/ios"
   mapbox_maps_flutter:
     :path: ".symlinks/plugins/mapbox_maps_flutter/ios"
-  path_provider_foundation:
-    :path: ".symlinks/plugins/path_provider_foundation/darwin"
   permission_handler_apple:
     :path: ".symlinks/plugins/permission_handler_apple/ios"
   photo_manager:
@@ -151,11 +145,10 @@ SPEC CHECKSUMS:
   image_picker_ios: e0ece4aa2a75771a7de3fa735d26d90817041326
   libwebp: 02b23773aedb6ff1fd38cec7a77b81414c6842a8
   Mantle: c5aa8794a29a022dfbbfc9799af95f477a69b62d
-  mapbox_maps_flutter: a1dfc0a0825a5ded612bea16fc1eecc9c47cbaf8
-  MapboxCommon: 5cc0e77733478a7b2a3a28af7c38adc8485e07d8
-  MapboxCoreMaps: b7b7703cd8af3ae9088f42c6d23b591947a1eb1f
-  MapboxMaps: 10b01217e5634aa7b6fc1fb10d036598d9240ba6
-  path_provider_foundation: bb55f6dbba17d0dccd6737fe6f7f34fbd0376880
+  mapbox_maps_flutter: 2ebdee9cbabc4c093fecbdeca179f9e01cbabfd6
+  MapboxCommon: 7dc22ef3ccd162e54b28ddf97e9a6a293a72875c
+  MapboxCoreMaps: fa266f524b2ab0c4d4c76d94db6411b243969b37
+  MapboxMaps: e8a15728a4600e9fef4e11a29bc21c4bf9c4cbc3
   permission_handler_apple: 4ed2196e43d0651e8ff7ca3483a069d469701f2d
   photo_manager: fe4cbb0808b96f8be4af7ce6ae18dcd9c9b983c6
   SDWebImage: e9c98383c7572d713c1a0d7dd2783b10599b9838
@@ -165,6 +158,6 @@ SPEC CHECKSUMS:
   ultralytics_yolo: 650ea1417a5b3ef9b1acc55e6edef5385018d3b5
   url_launcher_ios: 7a95fa5b60cc718a708b8f2966718e93db0cef1b
 
-PODFILE CHECKSUM: b4d15d5ba0a19dbd22b9b7e5c271cfe5bf517221
+PODFILE CHECKSUM: 84bf8590317feccd3453bdfbb1cca75a256d778f
 
 COCOAPODS: 1.16.2

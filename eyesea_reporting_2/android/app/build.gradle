@@ -31,7 +31,7 @@ if (keystorePropertiesFile.exists()) {
 }
 
 android {
-    namespace = "com.eyesea.eyesea_reporting_2"
+    namespace = "com.mariussuteu.eyesea.eyeseareporting"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -46,7 +46,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.mariussuteu.trashapp"
+        applicationId = "com.mariussuteu.eyesea.eyeseareporting"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutterVersionCode.toInteger()
@@ -66,7 +66,13 @@ android {
             if (keystorePropertiesFile.exists()) {
                 keyAlias keystoreProperties['keyAlias']
                 keyPassword keystoreProperties['keyPassword']
-                storeFile keystoreProperties['storeFile'] ? file(keystoreProperties['storeFile']) : null
+                // Resolve keystore path relative to android directory (where key.properties is)
+                def keystorePath = keystoreProperties['storeFile']
+                if (keystorePath) {
+                    storeFile keystorePath.startsWith('/') 
+                        ? file(keystorePath) 
+                        : file("${rootProject.projectDir}/${keystorePath}")
+                }
                 storePassword keystoreProperties['storePassword']
             }
         }

@@ -64,6 +64,7 @@ dependencies:
   ultralytics_yolo: ^0.1.46
   flutter_local_notifications: ^18.0.1
   flutter_secure_storage: ^9.2.2
+  flutter_dotenv: ^5.1.0
 
 dev_dependencies:
   flutter_test:
@@ -98,6 +99,7 @@ flutter:
     - assets/icons/
     - assets/legal/
     - assets/models/
+    - .env
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/assets-and-images/#resolution-aware

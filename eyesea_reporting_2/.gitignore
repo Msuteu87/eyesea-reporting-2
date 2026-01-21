@@ -76,3 +76,6 @@ android/key.properties
 
 # iOS secrets
 ios/Flutter/Secrets.xcconfig
+
+# Documentation (contains sensitive information)
+docs/

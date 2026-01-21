@@ -1,4 +1,4 @@
-package com.eyesea.eyesea_reporting_2
+package com.mariussuteu.eyesea.eyeseareporting
 
 import io.flutter.embedding.android.FlutterActivity
 

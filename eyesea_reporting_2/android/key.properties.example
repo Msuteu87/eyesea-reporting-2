@@ -1,0 +1,16 @@
+# Android Release Signing Configuration
+# Copy this file to key.properties and fill in your actual values
+# key.properties is git-ignored and should NOT be committed
+
+# Keystore password (the password for the keystore file)
+storePassword=your-keystore-password-here
+
+# Key password (the password for the specific key alias)
+# Can be the same as storePassword for simplicity
+keyPassword=your-key-password-here
+
+# Key alias (the name you gave to your key when creating the keystore)
+keyAlias=eyesea-key
+
+# Path to the keystore file (relative to android/ directory)
+storeFile=app/eyesea-release-key.jks

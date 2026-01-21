@@ -40,6 +40,14 @@ post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
     
+    # Enforce minimum iOS deployment target for all pods
+    # Prevents warnings about pods using outdated deployment targets
+    target.build_configurations.each do |config|
+      if config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'].to_f < 15.5
+        config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.5'
+      end
+    end
+    
     # Aggressively disable debug symbols for Mapbox to prevent App Store Connect warnings
     # Mapbox doesn't provide dSYMs for their private frameworks
     if ['MapboxCommon', 'MapboxCoreMaps', 'MapboxMaps', 'Turf', 'MapboxMobileEvents'].include? target.name
