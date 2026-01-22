@@ -96,8 +96,8 @@ This EULA, together with the Terms of Service and Privacy Policy, constitutes th
 
 For questions about this EULA:
 - **Eyesea New Zealand Inc**
-- Email: legal@eyesea.io
-- Website: https://eyesea.io/legal
+- Email: privacy@eyesea.org
+- Website: https://eyesea.org
 
 ---
 

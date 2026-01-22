@@ -11,9 +11,9 @@ This Privacy Policy explains how we collect, use, disclose, and safeguard your i
 ## 2. Data Controller
 
 **Eyesea New Zealand Inc**
-- Email: privacy@eyesea.io
-- Website: https://eyesea.io
-- Privacy Enquiries: privacy@eyesea.io
+- Email: privacy@eyesea.org
+- Website: https://eyesea.org
+- Privacy Enquiries: privacy@eyesea.org
 
 For EU users, we act as the Data Controller for your personal data.
 
@@ -133,7 +133,7 @@ Additional rights include:
 - Right to object to processing
 - Right to lodge a complaint with your local Data Protection Authority
 
-To exercise these rights, contact: privacy@eyesea.io
+To exercise these rights, contact: privacy@eyesea.org
 
 ### 8.3 California Users (CCPA)
 You have the right to:
@@ -158,7 +158,7 @@ We implement appropriate technical and organizational measures to protect your d
 
 ## 10. Children's Privacy
 
-The App is not intended for children under 16. We do not knowingly collect information from children under 16. If you believe we have collected such information, please contact us immediately at privacy@eyesea.io.
+The App is not intended for children under 16. We do not knowingly collect information from children under 16. If you believe we have collected such information, please contact us immediately at privacy@eyesea.org.
 
 ## 11. Cookies and Tracking
 
@@ -175,10 +175,8 @@ We may update this Privacy Policy periodically. We will notify you of material c
 ## 14. Contact Us
 
 For privacy-related inquiries:
-- **Privacy Officer**: privacy@eyesea.io
-- **General Enquiries**: support@eyesea.io
-- **Legal**: legal@eyesea.io
-- **Website**: https://eyesea.io/privacy
+- **Privacy Enquiries**: privacy@eyesea.org
+- **Website**: https://eyesea.org
 
 ---
 

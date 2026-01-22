@@ -11,8 +11,8 @@ By downloading, installing, or using the Eyesea mobile application ("App"), you 
 Eyesea is operated by **Eyesea New Zealand Inc**, a company registered in New Zealand. We operate globally and are committed to protecting marine environments through crowdsourced pollution reporting.
 
 **Contact Information:**
-- Email: legal@eyesea.io
-- Website: https://eyesea.io
+- Email: privacy@eyesea.org
+- Website: https://eyesea.org
 
 ## 3. Description of Service
 
@@ -101,13 +101,13 @@ This App is operated from New Zealand but is accessible globally. If you access 
 
 ## 14. Dispute Resolution
 
-Before initiating formal legal proceedings, you agree to attempt to resolve disputes informally by contacting us at legal@eyesea.io.
+Before initiating formal legal proceedings, you agree to attempt to resolve disputes informally by contacting us at privacy@eyesea.org.
 
 ## 15. Contact
 
 For questions about these Terms:
-- Email: legal@eyesea.io
-- Website: https://eyesea.io/legal
+- Email: privacy@eyesea.org
+- Website: https://eyesea.org
 
 ---
 

@@ -1,0 +1,10 @@
+First Release - Help protect our oceans!
+
+Key Features:
+• AI-powered pollution detection
+• Interactive map view
+• Works offline
+• Social feed & cleanup events
+• Leaderboard tracking
+
+Privacy-first: All AI processing happens on your device.
