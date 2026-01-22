@@ -23,9 +23,13 @@ workflows:
         script: |
           cd ios
           pod install
+      - name: Set up code signing
+        script: |
+          xcode-project use-profiles
       - name: Build iOS
         script: |
           flutter build ipa --release \
+            --export-options-plist=/Users/builder/export_options.plist \
             --dart-define=SUPABASE_URL=$SUPABASE_URL \
             --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY \
             --dart-define=MAPBOX_ACCESS_TOKEN=$MAPBOX_ACCESS_TOKEN
@@ -93,9 +97,13 @@ workflows:
         script: |
           cd ios
           pod install
+      - name: Set up code signing
+        script: |
+          xcode-project use-profiles
       - name: Build iOS
         script: |
           flutter build ipa --release \
+            --export-options-plist=/Users/builder/export_options.plist \
             --dart-define=SUPABASE_URL=$SUPABASE_URL \
             --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY \
             --dart-define=MAPBOX_ACCESS_TOKEN=$MAPBOX_ACCESS_TOKEN
