@@ -6,14 +6,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../utils/logger.dart';
 
-// TODO: [SCALABILITY] Unbounded notification list growth
-// Current: _notifications list accumulates all loaded notifications
-// Fix: Cap list at 100 items, implement pagination for older notifications
-
-// TODO: [FEATURE] Add notification tap navigation
-// Current: _onNotificationTapped logs but doesn't navigate
-// Fix: Parse payload, use GoRouter to navigate to relevant screen
-// (e.g., report details, badge earned, event details)
+// Note: Notification list is capped at 100 items for performance.
+// Navigation is handled in the UI layer (MapSearchBar) via onNotificationTap callback.
 
 /// Notification model matching the database schema
 class AppNotification {
@@ -77,6 +71,8 @@ class AppNotification {
 /// Service for handling notifications via Supabase Realtime and local notifications.
 /// Shows native device notifications when new notifications arrive.
 class NotificationService {
+  static const int _maxNotifications = 100;
+
   final SupabaseClient _supabase;
   RealtimeChannel? _channel;
 
@@ -278,7 +274,7 @@ class NotificationService {
           .from('notifications')
           .select()
           .order('created_at', ascending: false)
-          .limit(50);
+          .limit(_maxNotifications);
 
       _notifications = (response as List)
           .map((json) => AppNotification.fromJson(json))
@@ -324,6 +320,11 @@ class NotificationService {
       // Add to the beginning of the list
       _notifications.insert(0, notification);
       _unreadCount++;
+
+      // Cap list at max notifications for performance
+      if (_notifications.length > _maxNotifications) {
+        _notifications = _notifications.sublist(0, _maxNotifications);
+      }
 
       // Emit to streams (for in-app UI)
       _notificationsController.add(_notifications);

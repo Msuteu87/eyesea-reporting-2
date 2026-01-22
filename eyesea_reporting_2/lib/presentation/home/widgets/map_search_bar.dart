@@ -5,10 +5,12 @@ import '../../../core/utils/logger.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:provider/provider.dart';
 import '../../../core/services/geocoding_service.dart';
+import '../../../core/services/notification_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../domain/entities/report.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/reports_map_provider.dart';
+import '../../widgets/notification_panel.dart';
 
 /// Floating search bar with integrated filter button for Google Maps-like UX.
 /// Contains a location search field, filter toggle, and user avatar.
@@ -371,6 +373,9 @@ class _MapSearchBarState extends State<MapSearchBar>
                     ),
                   ),
 
+                  // Notification bell with badge
+                  _buildNotificationBell(context, isDark),
+
                   // Divider
                   Container(
                     width: 1,
@@ -526,6 +531,100 @@ class _MapSearchBarState extends State<MapSearchBar>
         ),
       ),
     );
+  }
+
+  Widget _buildNotificationBell(BuildContext context, bool isDark) {
+    final notificationService = context.read<NotificationService>();
+
+    return StreamBuilder<List<AppNotification>>(
+      stream: notificationService.notifications,
+      initialData: notificationService.allNotifications,
+      builder: (context, snapshot) {
+        final notifications = snapshot.data ?? [];
+        final unreadCount = notifications.where((n) => !n.read).length;
+
+        return GestureDetector(
+          onTap: () => _openNotificationPanel(context),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: Colors.transparent,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    LucideIcons.bell,
+                    color: Colors.grey[500],
+                    size: 18,
+                  ),
+                ),
+                // Badge showing unread count
+                if (unreadCount > 0)
+                  Positioned(
+                    right: -2,
+                    top: -2,
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: const BoxDecoration(
+                        color: AppColors.punchRed,
+                        shape: BoxShape.circle,
+                      ),
+                      constraints: const BoxConstraints(
+                        minWidth: 16,
+                        minHeight: 16,
+                      ),
+                      child: Text(
+                        unreadCount > 9 ? '9+' : '$unreadCount',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _openNotificationPanel(BuildContext context) {
+    NotificationPanel.show(
+      context,
+      onNotificationTap: (notification) {
+        _navigateToNotificationTarget(context, notification);
+      },
+    );
+  }
+
+  void _navigateToNotificationTarget(
+      BuildContext context, AppNotification notification) {
+    switch (notification.type) {
+      case 'report_recovered':
+      case 'report_verified':
+        // Navigate to report details if reportId is available
+        final reportId = notification.data?['report_id'] as String?;
+        if (reportId != null) {
+          context.push('/report/$reportId');
+        }
+        break;
+      case 'badge_earned':
+        // Navigate to profile to see badges
+        context.push('/profile');
+        break;
+      case 'system':
+      default:
+        // No navigation for system notifications
+        break;
+    }
   }
 }
 

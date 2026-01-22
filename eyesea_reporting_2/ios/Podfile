@@ -39,7 +39,17 @@ end
 post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
-    
+
+    # Fix CodeSign issues for simulator builds
+    target.build_configurations.each do |config|
+      if config.build_settings['SDKROOT'] == 'iphonesimulator' || config.name == 'Debug'
+        config.build_settings['CODE_SIGNING_ALLOWED'] = 'NO'
+        config.build_settings['CODE_SIGNING_REQUIRED'] = 'NO'
+        config.build_settings['EXPANDED_CODE_SIGN_IDENTITY'] = ''
+        config.build_settings['CODE_SIGN_IDENTITY'] = ''
+      end
+    end
+
     # Enforce minimum iOS deployment target for all pods
     # Prevents warnings about pods using outdated deployment targets
     target.build_configurations.each do |config|
