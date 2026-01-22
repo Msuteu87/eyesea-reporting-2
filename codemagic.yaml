@@ -3,18 +3,12 @@ workflows:
     name: iOS Release
     max_build_duration: 60
     instance_type: mac_mini_m2
-    working_directory: eyesea_reporting_2  # Set working directory to Flutter app folder
+    working_directory: eyesea_reporting_2
     integrations:
-      app_store_connect: Eyesea_reporting_codemagic  # Set this name in Codemagic UI → Integrations
+      app_store_connect: eyeseaasc
     environment:
-      # Option 1: Use groups (preferred if working)
       groups:
-        - eyesea_secrets  # Create this group in Codemagic UI → Environment Variables
-      # Option 2: Use individual vars (if groups give encryption errors - uncomment below and comment out groups)
-      # vars:
-      #   SUPABASE_URL: Encrypted(...)  # Copy from Codemagic UI after creating variable
-      #   SUPABASE_ANON_KEY: Encrypted(...)
-      #   MAPBOX_ACCESS_TOKEN: Encrypted(...)
+        - eyesea_secrets  # Must exist in Codemagic UI → App → Environment Variables
       ios_signing:
         distribution_type: app_store
         bundle_identifier: com.mariussuteu.eyesea.eyeseareporting
@@ -46,18 +40,12 @@ workflows:
     name: Android Release
     max_build_duration: 60
     instance_type: mac_mini_m2
-    working_directory: eyesea_reporting_2  # Set working directory to Flutter app folder
+    working_directory: eyesea_reporting_2
     environment:
-      # Option 1: Use groups (preferred if working)
       groups:
-        - eyesea_secrets  # Create this group in Codemagic UI → Environment Variables
-      # Option 2: Use individual vars (if groups give encryption errors - uncomment below and comment out groups)
-      # vars:
-      #   SUPABASE_URL: Encrypted(...)  # Copy from Codemagic UI after creating variable
-      #   SUPABASE_ANON_KEY: Encrypted(...)
-      #   MAPBOX_ACCESS_TOKEN: Encrypted(...)
+        - eyesea_secrets  # Must exist in Codemagic UI → App → Environment Variables
       android_signing:
-        - eyesea_keystore  # Reference name from Codemagic UI → Code signing identities
+        - eyesea_keystore  # Must exist in Codemagic UI → Code signing identities
       flutter: stable
       java: 17
     scripts:
@@ -70,30 +58,27 @@ workflows:
             --dart-define=SUPABASE_URL=$SUPABASE_URL \
             --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY \
             --dart-define=MAPBOX_ACCESS_TOKEN=$MAPBOX_ACCESS_TOKEN
+      - name: Decode Google Play credentials
+        script: |
+          echo $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS | base64 --decode > /tmp/gcloud-service-account.json
     artifacts:
       - build/app/outputs/bundle/release/*.aab
-      - build/app/outputs/mapping/release/mapping.txt  # ProGuard mapping file for crash deobfuscation
+      - build/app/outputs/mapping/release/mapping.txt
     publishing:
       google_play:
-        credentials: Encrypted(...)  # Service account JSON from Google Play Console
+        credentials: /tmp/gcloud-service-account.json
         track: internal
 
   all-platforms:
     name: Build All Platforms
     max_build_duration: 90
     instance_type: mac_mini_m2
-    working_directory: eyesea_reporting_2  # Set working directory to Flutter app folder
+    working_directory: eyesea_reporting_2
     integrations:
-      app_store_connect: Eyesea_reporting_codemagic  # Set this name in Codemagic UI → Integrations
+      app_store_connect: eyeseaasc
     environment:
-      # Option 1: Use groups (preferred if working)
       groups:
-        - eyesea_secrets  # Create this group in Codemagic UI → Environment Variables
-      # Option 2: Use individual vars (if groups give encryption errors - uncomment below and comment out groups)
-      # vars:
-      #   SUPABASE_URL: Encrypted(...)  # Copy from Codemagic UI after creating variable
-      #   SUPABASE_ANON_KEY: Encrypted(...)
-      #   MAPBOX_ACCESS_TOKEN: Encrypted(...)
+        - eyesea_secrets  # Must exist in Codemagic UI → App → Environment Variables
       ios_signing:
         distribution_type: app_store
         bundle_identifier: com.mariussuteu.eyesea.eyeseareporting
@@ -123,14 +108,17 @@ workflows:
             --dart-define=SUPABASE_URL=$SUPABASE_URL \
             --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY \
             --dart-define=MAPBOX_ACCESS_TOKEN=$MAPBOX_ACCESS_TOKEN
+      - name: Decode Google Play credentials
+        script: |
+          echo $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS | base64 --decode > /tmp/gcloud-service-account.json
     artifacts:
       - build/ios/ipa/*.ipa
       - build/app/outputs/bundle/release/*.aab
-      - build/app/outputs/mapping/release/mapping.txt  # ProGuard mapping file for crash deobfuscation
+      - build/app/outputs/mapping/release/mapping.txt
     publishing:
       app_store_connect:
         auth: integration
         submit_to_testflight: true
       google_play:
-        credentials: Encrypted(...)
+        credentials: /tmp/gcloud-service-account.json
         track: internal
