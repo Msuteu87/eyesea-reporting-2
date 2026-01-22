@@ -24,21 +24,19 @@ workflows:
     scripts:
       - name: Get Flutter dependencies
         script: |
-          cd eyesea_reporting_2
           flutter pub get
       - name: Install CocoaPods
         script: |
-          cd eyesea_reporting_2/ios
+          cd ios
           pod install
       - name: Build iOS
         script: |
-          cd eyesea_reporting_2
           flutter build ipa --release \
             --dart-define=SUPABASE_URL=$SUPABASE_URL \
             --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY \
             --dart-define=MAPBOX_ACCESS_TOKEN=$MAPBOX_ACCESS_TOKEN
     artifacts:
-      - eyesea_reporting_2/build/ios/ipa/*.ipa
+      - build/ios/ipa/*.ipa
     publishing:
       app_store_connect:
         auth: integration
