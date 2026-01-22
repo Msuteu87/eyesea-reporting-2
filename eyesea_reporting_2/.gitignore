@@ -65,8 +65,8 @@ app.*.map.json
 # Coverage
 coverage/
 
-# Secrets
-lib/core/secrets.dart
+# Secrets (note: secrets.dart is safe to commit - it only reads from env vars)
+# lib/core/secrets.dart  # Removed - file contains no actual secrets
 
 # Android secrets
 android/gradle.properties
