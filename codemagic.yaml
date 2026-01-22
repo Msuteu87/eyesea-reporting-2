@@ -1,0 +1,124 @@
+workflows:
+  ios-release:
+    name: iOS Release
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.mariussuteu.eyesea.eyeseareporting
+      vars:
+        SUPABASE_URL: Encrypted(...)  # Add via Codemagic UI → Environment Variables
+        SUPABASE_ANON_KEY: Encrypted(...)
+        MAPBOX_ACCESS_TOKEN: Encrypted(...)
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+    scripts:
+      - name: Get Flutter dependencies
+        script: |
+          cd eyesea_reporting_2
+          flutter pub get
+      - name: Install CocoaPods
+        script: |
+          cd eyesea_reporting_2/ios
+          pod install
+      - name: Build iOS
+        script: |
+          cd eyesea_reporting_2
+          flutter build ipa --release \
+            --dart-define=SUPABASE_URL=$SUPABASE_URL \
+            --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY \
+            --dart-define=MAPBOX_ACCESS_TOKEN=$MAPBOX_ACCESS_TOKEN
+    artifacts:
+      - eyesea_reporting_2/build/ios/ipa/*.ipa
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+
+  android-release:
+    name: Android Release
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    environment:
+      android_signing:
+        - eyesea_keystore  # Reference name from Codemagic UI → Code signing identities
+      vars:
+        SUPABASE_URL: Encrypted(...)
+        SUPABASE_ANON_KEY: Encrypted(...)
+        MAPBOX_ACCESS_TOKEN: Encrypted(...)
+      flutter: stable
+      java: 17
+    scripts:
+      - name: Get Flutter dependencies
+        script: |
+          cd eyesea_reporting_2
+          flutter pub get
+      - name: Build Android App Bundle
+        script: |
+          cd eyesea_reporting_2
+          flutter build appbundle --release \
+            --dart-define=SUPABASE_URL=$SUPABASE_URL \
+            --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY \
+            --dart-define=MAPBOX_ACCESS_TOKEN=$MAPBOX_ACCESS_TOKEN
+    artifacts:
+      - eyesea_reporting_2/build/app/outputs/bundle/release/*.aab
+      - eyesea_reporting_2/build/app/outputs/mapping/release/mapping.txt  # ProGuard mapping file for crash deobfuscation
+    publishing:
+      google_play:
+        credentials: Encrypted(...)  # Service account JSON from Google Play Console
+        track: internal
+
+  all-platforms:
+    name: Build All Platforms
+    max_build_duration: 90
+    instance_type: mac_mini_m2
+    environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.mariussuteu.eyesea.eyeseareporting
+      android_signing:
+        - eyesea_keystore
+      vars:
+        SUPABASE_URL: Encrypted(...)
+        SUPABASE_ANON_KEY: Encrypted(...)
+        MAPBOX_ACCESS_TOKEN: Encrypted(...)
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+      java: 17
+    scripts:
+      - name: Get Flutter dependencies
+        script: |
+          cd eyesea_reporting_2
+          flutter pub get
+      - name: Install CocoaPods
+        script: |
+          cd eyesea_reporting_2/ios
+          pod install
+      - name: Build iOS
+        script: |
+          cd eyesea_reporting_2
+          flutter build ipa --release \
+            --dart-define=SUPABASE_URL=$SUPABASE_URL \
+            --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY \
+            --dart-define=MAPBOX_ACCESS_TOKEN=$MAPBOX_ACCESS_TOKEN
+      - name: Build Android
+        script: |
+          cd eyesea_reporting_2
+          flutter build appbundle --release \
+            --dart-define=SUPABASE_URL=$SUPABASE_URL \
+            --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY \
+            --dart-define=MAPBOX_ACCESS_TOKEN=$MAPBOX_ACCESS_TOKEN
+    artifacts:
+      - eyesea_reporting_2/build/ios/ipa/*.ipa
+      - eyesea_reporting_2/build/app/outputs/bundle/release/*.aab
+      - eyesea_reporting_2/build/app/outputs/mapping/release/mapping.txt  # ProGuard mapping file for crash deobfuscation
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+      google_play:
+        credentials: Encrypted(...)
+        track: internal
