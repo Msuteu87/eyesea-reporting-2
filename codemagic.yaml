@@ -6,8 +6,14 @@ workflows:
     integrations:
       app_store_connect: Eyesea_reporting_codemagic  # Set this name in Codemagic UI → Integrations
     environment:
+      # Option 1: Use groups (preferred if working)
       groups:
         - eyesea_secrets  # Create this group in Codemagic UI → Environment Variables
+      # Option 2: Use individual vars (if groups give encryption errors - uncomment below and comment out groups)
+      # vars:
+      #   SUPABASE_URL: Encrypted(...)  # Copy from Codemagic UI after creating variable
+      #   SUPABASE_ANON_KEY: Encrypted(...)
+      #   MAPBOX_ACCESS_TOKEN: Encrypted(...)
       ios_signing:
         distribution_type: app_store
         bundle_identifier: com.mariussuteu.eyesea.eyeseareporting
@@ -42,8 +48,14 @@ workflows:
     max_build_duration: 60
     instance_type: mac_mini_m2
     environment:
+      # Option 1: Use groups (preferred if working)
       groups:
         - eyesea_secrets  # Create this group in Codemagic UI → Environment Variables
+      # Option 2: Use individual vars (if groups give encryption errors - uncomment below and comment out groups)
+      # vars:
+      #   SUPABASE_URL: Encrypted(...)  # Copy from Codemagic UI after creating variable
+      #   SUPABASE_ANON_KEY: Encrypted(...)
+      #   MAPBOX_ACCESS_TOKEN: Encrypted(...)
       android_signing:
         - eyesea_keystore  # Reference name from Codemagic UI → Code signing identities
       flutter: stable
@@ -75,8 +87,14 @@ workflows:
     integrations:
       app_store_connect: Eyesea_reporting_codemagic  # Set this name in Codemagic UI → Integrations
     environment:
+      # Option 1: Use groups (preferred if working)
       groups:
         - eyesea_secrets  # Create this group in Codemagic UI → Environment Variables
+      # Option 2: Use individual vars (if groups give encryption errors - uncomment below and comment out groups)
+      # vars:
+      #   SUPABASE_URL: Encrypted(...)  # Copy from Codemagic UI after creating variable
+      #   SUPABASE_ANON_KEY: Encrypted(...)
+      #   MAPBOX_ACCESS_TOKEN: Encrypted(...)
       ios_signing:
         distribution_type: app_store
         bundle_identifier: com.mariussuteu.eyesea.eyeseareporting
