@@ -6,13 +6,11 @@ workflows:
     integrations:
       app_store_connect: app_store_connect_credentials  # Set this name in Codemagic UI → Integrations
     environment:
+      groups:
+        - eyesea_secrets  # Create this group in Codemagic UI → Environment Variables
       ios_signing:
         distribution_type: app_store
         bundle_identifier: com.mariussuteu.eyesea.eyeseareporting
-      vars:
-        SUPABASE_URL: Encrypted(...)  # Add via Codemagic UI → Environment Variables
-        SUPABASE_ANON_KEY: Encrypted(...)
-        MAPBOX_ACCESS_TOKEN: Encrypted(...)
       flutter: stable
       xcode: latest
       cocoapods: default
@@ -44,12 +42,10 @@ workflows:
     max_build_duration: 60
     instance_type: mac_mini_m2
     environment:
+      groups:
+        - eyesea_secrets  # Create this group in Codemagic UI → Environment Variables
       android_signing:
         - eyesea_keystore  # Reference name from Codemagic UI → Code signing identities
-      vars:
-        SUPABASE_URL: Encrypted(...)
-        SUPABASE_ANON_KEY: Encrypted(...)
-        MAPBOX_ACCESS_TOKEN: Encrypted(...)
       flutter: stable
       java: 17
     scripts:
@@ -79,15 +75,13 @@ workflows:
     integrations:
       app_store_connect: app_store_connect_credentials  # Set this name in Codemagic UI → Integrations
     environment:
+      groups:
+        - eyesea_secrets  # Create this group in Codemagic UI → Environment Variables
       ios_signing:
         distribution_type: app_store
         bundle_identifier: com.mariussuteu.eyesea.eyeseareporting
       android_signing:
         - eyesea_keystore
-      vars:
-        SUPABASE_URL: Encrypted(...)
-        SUPABASE_ANON_KEY: Encrypted(...)
-        MAPBOX_ACCESS_TOKEN: Encrypted(...)
       flutter: stable
       xcode: latest
       cocoapods: default
