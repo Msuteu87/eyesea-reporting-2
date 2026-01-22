@@ -58,15 +58,12 @@ workflows:
             --dart-define=SUPABASE_URL=$SUPABASE_URL \
             --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY \
             --dart-define=MAPBOX_ACCESS_TOKEN=$MAPBOX_ACCESS_TOKEN
-      - name: Decode Google Play credentials
-        script: |
-          echo $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS | base64 --decode > /tmp/gcloud-service-account.json
     artifacts:
       - build/app/outputs/bundle/release/*.aab
       - build/app/outputs/mapping/release/mapping.txt
     publishing:
       google_play:
-        credentials: /tmp/gcloud-service-account.json
+        credentials: $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
         track: internal
 
   all-platforms:
@@ -108,9 +105,6 @@ workflows:
             --dart-define=SUPABASE_URL=$SUPABASE_URL \
             --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY \
             --dart-define=MAPBOX_ACCESS_TOKEN=$MAPBOX_ACCESS_TOKEN
-      - name: Decode Google Play credentials
-        script: |
-          echo $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS | base64 --decode > /tmp/gcloud-service-account.json
     artifacts:
       - build/ios/ipa/*.ipa
       - build/app/outputs/bundle/release/*.aab
@@ -120,5 +114,5 @@ workflows:
         auth: integration
         submit_to_testflight: true
       google_play:
-        credentials: /tmp/gcloud-service-account.json
+        credentials: $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
         track: internal
