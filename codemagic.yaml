@@ -4,7 +4,7 @@ workflows:
     max_build_duration: 60
     instance_type: mac_mini_m2
     integrations:
-      app_store_connect: app_store_connect_credentials  # Set this name in Codemagic UI → Integrations
+      app_store_connect: Eyesea_reporting_codemagic  # Set this name in Codemagic UI → Integrations
     environment:
       groups:
         - eyesea_secrets  # Create this group in Codemagic UI → Environment Variables
@@ -73,7 +73,7 @@ workflows:
     max_build_duration: 90
     instance_type: mac_mini_m2
     integrations:
-      app_store_connect: app_store_connect_credentials  # Set this name in Codemagic UI → Integrations
+      app_store_connect: Eyesea_reporting_codemagic  # Set this name in Codemagic UI → Integrations
     environment:
       groups:
         - eyesea_secrets  # Create this group in Codemagic UI → Environment Variables
