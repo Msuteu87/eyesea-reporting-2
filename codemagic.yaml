@@ -16,6 +16,11 @@ workflows:
       xcode: latest
       cocoapods: default
     scripts:
+      - name: Create empty .env file (asset placeholder)
+        script: |
+          # Create empty .env file - actual secrets come from --dart-define
+          touch .env
+          echo "# Placeholder for flutter_dotenv - CI uses --dart-define" > .env
       - name: Clean and get Flutter dependencies
         script: |
           flutter clean
@@ -55,6 +60,11 @@ workflows:
       flutter: stable
       java: 17
     scripts:
+      - name: Create empty .env file (asset placeholder)
+        script: |
+          # Create empty .env file - actual secrets come from --dart-define
+          touch .env
+          echo "# Placeholder for flutter_dotenv - CI uses --dart-define" > .env
       - name: Get Flutter dependencies
         script: |
           flutter pub get
@@ -92,6 +102,11 @@ workflows:
       cocoapods: default
       java: 17
     scripts:
+      - name: Create empty .env file (asset placeholder)
+        script: |
+          # Create empty .env file - actual secrets come from --dart-define
+          touch .env
+          echo "# Placeholder for flutter_dotenv - CI uses --dart-define" > .env
       - name: Clean and get Flutter dependencies
         script: |
           flutter clean
