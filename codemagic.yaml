@@ -65,6 +65,13 @@ workflows:
           # Create empty .env file - actual secrets come from --dart-define
           touch .env
           echo "# Placeholder for flutter_dotenv - CI uses --dart-define" > .env
+      - name: Set up Android signing
+        script: |
+          # Create key.properties from Codemagic environment variables
+          echo "storePassword=$CM_KEYSTORE_PASSWORD" >> android/key.properties
+          echo "keyPassword=$CM_KEY_PASSWORD" >> android/key.properties
+          echo "keyAlias=$CM_KEY_ALIAS" >> android/key.properties
+          echo "storeFile=$CM_KEYSTORE_PATH" >> android/key.properties
       - name: Get Flutter dependencies
         script: |
           flutter pub get
@@ -126,6 +133,13 @@ workflows:
             --dart-define=SUPABASE_URL=$SUPABASE_URL \
             --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY \
             --dart-define=MAPBOX_ACCESS_TOKEN=$MAPBOX_ACCESS_TOKEN
+      - name: Set up Android signing
+        script: |
+          # Create key.properties from Codemagic environment variables
+          echo "storePassword=$CM_KEYSTORE_PASSWORD" >> android/key.properties
+          echo "keyPassword=$CM_KEY_PASSWORD" >> android/key.properties
+          echo "keyAlias=$CM_KEY_ALIAS" >> android/key.properties
+          echo "storeFile=$CM_KEYSTORE_PATH" >> android/key.properties
       - name: Build Android
         script: |
           flutter build appbundle --release \
