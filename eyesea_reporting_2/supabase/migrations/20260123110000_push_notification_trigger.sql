@@ -1,0 +1,71 @@
+-- Migration: Push Notification Setup
+--
+-- This migration documents the setup needed for push notifications.
+-- The actual trigger is configured via Supabase Dashboard (Database Webhooks)
+-- because it's simpler and more reliable than pg_net + vault secrets.
+--
+-- ## Setup Instructions
+--
+-- ### 1. Deploy the Edge Function
+--
+-- ```bash
+-- cd eyesea_reporting_2/supabase
+-- supabase functions deploy send-push-notification
+-- ```
+--
+-- ### 2. Set FCM Server Key
+--
+-- Get your Firebase Server Key from:
+-- Firebase Console > Project Settings > Cloud Messaging > Server key
+--
+-- ```bash
+-- supabase secrets set FCM_SERVER_KEY=your_firebase_server_key
+-- ```
+--
+-- ### 3. Create Database Webhook (Supabase Dashboard)
+--
+-- 1. Go to: Dashboard > Database > Webhooks
+-- 2. Click "Create a new hook"
+-- 3. Configure:
+--    - Name: send-push-notification
+--    - Table: notifications
+--    - Events: INSERT
+--    - Type: Supabase Edge Functions
+--    - Function: send-push-notification
+--    - HTTP Headers: (none needed, service role is automatic)
+-- 4. Save
+--
+-- ### 4. Configure Firebase in Flutter App
+--
+-- **Android:**
+-- 1. Go to Firebase Console > Project Settings > Your apps
+-- 2. Add Android app with package name: com.mariussuteu.eyesea.eyeseareporting
+-- 3. Download google-services.json
+-- 4. Place in: android/app/google-services.json
+--
+-- **iOS:**
+-- 1. Go to Firebase Console > Project Settings > Your apps
+-- 2. Add iOS app with bundle ID: com.mariussuteu.eyesea.eyeseareporting
+-- 3. Download GoogleService-Info.plist
+-- 4. Place in: ios/Runner/GoogleService-Info.plist (via Xcode)
+-- 5. Enable Push Notifications capability in Xcode
+-- 6. Upload APNs key to Firebase:
+--    - Apple Developer > Keys > Create APNs key
+--    - Firebase Console > Project Settings > Cloud Messaging > APNs
+--
+-- ## Testing
+--
+-- Insert a test notification:
+-- ```sql
+-- INSERT INTO notifications (user_id, type, title, body)
+-- VALUES ('your-user-id', 'system', 'Test Push', 'This is a test notification');
+-- ```
+--
+-- Check Edge Function logs in Supabase Dashboard > Functions > send-push-notification > Logs
+
+-- Grant service_role access to device_tokens for the Edge Function
+GRANT SELECT ON device_tokens TO service_role;
+GRANT DELETE ON device_tokens TO service_role;
+
+-- Ensure the get_user_push_tokens function is accessible
+GRANT EXECUTE ON FUNCTION get_user_push_tokens(UUID) TO service_role;

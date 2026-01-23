@@ -21,6 +21,16 @@ workflows:
           # Create empty .env file - actual secrets come from --dart-define
           touch .env
           echo "# Placeholder for flutter_dotenv - CI uses --dart-define" > .env
+      - name: Set up Firebase config for iOS
+        script: |
+          # Decode GoogleService-Info.plist from base64 environment variable
+          # Add GOOGLE_SERVICE_INFO_PLIST_BASE64 to Codemagic environment variables
+          if [ -n "$GOOGLE_SERVICE_INFO_PLIST_BASE64" ]; then
+            echo $GOOGLE_SERVICE_INFO_PLIST_BASE64 | base64 --decode > ios/Runner/GoogleService-Info.plist
+            echo "GoogleService-Info.plist created successfully"
+          else
+            echo "Warning: GOOGLE_SERVICE_INFO_PLIST_BASE64 not set - push notifications may not work"
+          fi
       - name: Clean and get Flutter dependencies
         script: |
           flutter clean
@@ -65,6 +75,16 @@ workflows:
           # Create empty .env file - actual secrets come from --dart-define
           touch .env
           echo "# Placeholder for flutter_dotenv - CI uses --dart-define" > .env
+      - name: Set up Firebase config for Android
+        script: |
+          # Decode google-services.json from base64 environment variable
+          # Add GOOGLE_SERVICES_JSON_BASE64 to Codemagic environment variables
+          if [ -n "$GOOGLE_SERVICES_JSON_BASE64" ]; then
+            echo $GOOGLE_SERVICES_JSON_BASE64 | base64 --decode > android/app/google-services.json
+            echo "google-services.json created successfully"
+          else
+            echo "Warning: GOOGLE_SERVICES_JSON_BASE64 not set - push notifications may not work"
+          fi
       - name: Set up Android signing
         script: |
           # Create key.properties from Codemagic environment variables
@@ -115,6 +135,23 @@ workflows:
           # Create empty .env file - actual secrets come from --dart-define
           touch .env
           echo "# Placeholder for flutter_dotenv - CI uses --dart-define" > .env
+      - name: Set up Firebase config files
+        script: |
+          # Decode Firebase config files from base64 environment variables
+          # iOS: GoogleService-Info.plist
+          if [ -n "$GOOGLE_SERVICE_INFO_PLIST_BASE64" ]; then
+            echo $GOOGLE_SERVICE_INFO_PLIST_BASE64 | base64 --decode > ios/Runner/GoogleService-Info.plist
+            echo "GoogleService-Info.plist created successfully"
+          else
+            echo "Warning: GOOGLE_SERVICE_INFO_PLIST_BASE64 not set - iOS push notifications may not work"
+          fi
+          # Android: google-services.json
+          if [ -n "$GOOGLE_SERVICES_JSON_BASE64" ]; then
+            echo $GOOGLE_SERVICES_JSON_BASE64 | base64 --decode > android/app/google-services.json
+            echo "google-services.json created successfully"
+          else
+            echo "Warning: GOOGLE_SERVICES_JSON_BASE64 not set - Android push notifications may not work"
+          fi
       - name: Clean and get Flutter dependencies
         script: |
           flutter clean

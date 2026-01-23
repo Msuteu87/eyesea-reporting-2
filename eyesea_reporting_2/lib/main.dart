@@ -1,17 +1,4 @@
-// TODO: [SCALABILITY] Consider using GetIt service locator for DI
-// Current: 185+ lines of manual dependency injection
-// Problems:
-// - Hard to test (difficult to mock dependencies)
-// - Hard to swap implementations (e.g., different cache backends)
-// - No lazy initialization (all services created at startup)
-// Fix: Use GetIt package for service registration with lazy singletons
-// Example: getIt.registerLazySingleton<ConnectivityService>(() => ...)
-
-// TODO: [SCALABILITY] Avoid ChangeNotifierProvider.value() anti-pattern
-// Current: Uses .value() which doesn't manage provider lifecycle
-// Risk: If provider created in one context and used in another, state mismatches
-// Fix: Use create: with proper lifecycle management for better memory handling
-
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:hive_flutter/hive_flutter.dart';
@@ -27,6 +14,7 @@ import 'core/services/profile_cache_service.dart';
 import 'core/services/report_cache_service.dart';
 import 'core/services/report_queue_service.dart';
 import 'core/services/notification_service.dart';
+import 'core/services/push_notification_service.dart';
 import 'data/datasources/auth_data_source.dart';
 import 'data/datasources/report_data_source.dart';
 import 'data/datasources/social_feed_data_source.dart';
@@ -72,6 +60,14 @@ Future<void> main() async {
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
   ]);
+
+  // Initialize Firebase for push notifications
+  try {
+    await Firebase.initializeApp();
+    AppLogger.info('Firebase initialized');
+  } catch (e) {
+    AppLogger.warning('Firebase initialization failed: $e. Push notifications disabled.');
+  }
 
   // Initialize Hive for offline storage
   await Hive.initFlutter();
@@ -157,6 +153,10 @@ Future<void> main() async {
   final notificationService = NotificationService(supabaseClient);
   await notificationService.initialize();
 
+  // Initialize push notification service for FCM
+  final pushNotificationService = PushNotificationService(supabaseClient);
+  await pushNotificationService.initialize();
+
   // Create reports map provider for displaying markers on the map
   final reportsMapProvider = ReportsMapProvider(
     reportRepository,
@@ -212,6 +212,10 @@ Future<void> main() async {
         ),
         Provider<NotificationService>(
           create: (_) => notificationService,
+          dispose: (_, service) => service.dispose(),
+        ),
+        Provider<PushNotificationService>(
+          create: (_) => pushNotificationService,
           dispose: (_, service) => service.dispose(),
         ),
         ChangeNotifierProvider<ReportsMapProvider>.value(

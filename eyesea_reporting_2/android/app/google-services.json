@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "25690098711",
+    "project_id": "eyesea2-d6d65",
+    "storage_bucket": "eyesea2-d6d65.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:25690098711:android:31c785faa337679dc4e052",
+        "android_client_info": {
+          "package_name": "com.mariussuteu.eyesea.eyeseareporting"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCvABe8qirJm9zdGT8HlCIM4Cc3bEsFlv4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
