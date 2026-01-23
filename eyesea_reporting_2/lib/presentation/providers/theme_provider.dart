@@ -12,13 +12,17 @@ class ThemeProvider extends ChangeNotifier {
   ThemeMode get themeMode => _themeMode;
 
   /// Initialize by loading saved preference
+  /// Defaults to system mode if no preference is saved
   Future<void> initialize() async {
     final prefs = await SharedPreferences.getInstance();
     final savedIndex = prefs.getInt(_themeModeKey);
     if (savedIndex != null && savedIndex < ThemeMode.values.length) {
       _themeMode = ThemeMode.values[savedIndex];
-      notifyListeners();
+    } else {
+      // Explicitly set to system mode as default (no saved preference)
+      _themeMode = ThemeMode.system;
     }
+    notifyListeners();
   }
 
   /// Set theme mode and persist to storage
