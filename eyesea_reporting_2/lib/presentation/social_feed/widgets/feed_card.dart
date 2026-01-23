@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../domain/entities/feed_item.dart';
+import '../../../domain/entities/unified_feed_item.dart';
 import '../../../domain/entities/report.dart';
 import 'thank_you_button.dart';
 
-/// Instagram-style full-width card for displaying a feed item
+/// Instagram-style full-width card for displaying a report feed item
 class FeedCard extends StatelessWidget {
-  final FeedItem item;
+  final ReportFeedItem item;
   final VoidCallback? onThankPressed;
   final bool canThank;
 
@@ -118,7 +118,7 @@ class FeedCard extends StatelessWidget {
 
           // Time ago
           Text(
-            _formatTimeAgo(item.reportedAt),
+            _formatTimeAgo(item.createdAt),
             style: TextStyle(
               fontSize: 12,
               color: isDark ? Colors.grey[500] : Colors.grey[500],

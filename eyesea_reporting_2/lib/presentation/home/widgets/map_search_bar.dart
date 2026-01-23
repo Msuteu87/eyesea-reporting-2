@@ -19,9 +19,14 @@ class MapSearchBar extends StatefulWidget {
   /// Returns [latitude, longitude] coordinates.
   final void Function(double latitude, double longitude)? onLocationSelected;
 
+  /// Callback when filter panel expands or collapses.
+  /// Used by parent to adjust other UI elements positioning.
+  final void Function(bool isExpanded)? onFiltersExpandedChanged;
+
   const MapSearchBar({
     super.key,
     this.onLocationSelected,
+    this.onFiltersExpandedChanged,
   });
 
   @override
@@ -69,6 +74,8 @@ class _MapSearchBarState extends State<MapSearchBar>
         _filterAnimationController.reverse();
       }
     });
+    // Notify parent about filter expansion state
+    widget.onFiltersExpandedChanged?.call(_filtersExpanded);
   }
 
   Future<void> _performSearch(String query) async {
@@ -619,6 +626,11 @@ class _MapSearchBarState extends State<MapSearchBar>
       case 'badge_earned':
         // Navigate to profile to see badges
         context.push('/profile');
+        break;
+      case 'event_created':
+        // Navigate to events list (event detail screen to be added in Phase 2)
+        // TODO: Add /events/:eventId route for deep linking to specific event
+        context.go('/events');
         break;
       case 'system':
       default:

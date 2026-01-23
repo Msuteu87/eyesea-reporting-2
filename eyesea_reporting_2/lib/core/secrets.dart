@@ -14,12 +14,22 @@ import 'utils/logger.dart';
 /// - Production: Use --dart-define flags during build:
 ///   flutter build ios --release --dart-define=SUPABASE_URL=... --dart-define=SUPABASE_ANON_KEY=... --dart-define=MAPBOX_ACCESS_TOKEN=...
 class Secrets {
+  /// Safely get a value from dotenv, returning empty string if not initialized
+  static String _getFromDotenv(String key) {
+    try {
+      if (!dotenv.isInitialized) return '';
+      return dotenv.env[key] ?? '';
+    } catch (e) {
+      return '';
+    }
+  }
+
   /// Supabase project URL
   static String get supabaseUrl {
     // Priority: dart-define (production) > .env (development) > empty
     final value = const String.fromEnvironment('SUPABASE_URL', defaultValue: '').isNotEmpty
         ? const String.fromEnvironment('SUPABASE_URL')
-        : (dotenv.env['SUPABASE_URL'] ?? '');
+        : _getFromDotenv('SUPABASE_URL');
     
     if (kDebugMode && value.isEmpty) {
       AppLogger.warning('SUPABASE_URL is not configured. App may not work correctly.');
@@ -32,7 +42,7 @@ class Secrets {
   static String get supabaseAnonKey {
     final value = const String.fromEnvironment('SUPABASE_ANON_KEY', defaultValue: '').isNotEmpty
         ? const String.fromEnvironment('SUPABASE_ANON_KEY')
-        : (dotenv.env['SUPABASE_ANON_KEY'] ?? '');
+        : _getFromDotenv('SUPABASE_ANON_KEY');
     
     if (kDebugMode && value.isEmpty) {
       AppLogger.warning('SUPABASE_ANON_KEY is not configured. App may not work correctly.');
@@ -45,7 +55,7 @@ class Secrets {
   static String get mapboxAccessToken {
     final value = const String.fromEnvironment('MAPBOX_ACCESS_TOKEN', defaultValue: '').isNotEmpty
         ? const String.fromEnvironment('MAPBOX_ACCESS_TOKEN')
-        : (dotenv.env['MAPBOX_ACCESS_TOKEN'] ?? '');
+        : _getFromDotenv('MAPBOX_ACCESS_TOKEN');
     
     if (kDebugMode && value.isEmpty) {
       AppLogger.warning('MAPBOX_ACCESS_TOKEN is not configured. Maps may not work.');

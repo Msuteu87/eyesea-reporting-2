@@ -20,7 +20,8 @@ import '../utils/logger.dart';
 /// Service for on-device AI analysis of images using Ultralytics YOLO.
 /// Uses YOLOv8/v11 for object detection with grouping (pollution vs people).
 class AIAnalysisService {
-  static const double _confidenceThreshold = 0.25;
+  // Lowered from 0.25 to catch more detections (reduce false negatives)
+  static const double _confidenceThreshold = 0.15;
   static const String _modelName = 'yolo11n';
 
   // COCO classes grouped by category
@@ -64,6 +65,16 @@ class AIAnalysisService {
     'cell phone',
     'remote',
     'tie',
+    'hair drier',
+
+    // Cutlery (common outdoor litter)
+    'fork',
+    'knife',
+    'spoon',
+
+    // Other common litter
+    'scissors',
+    'teddy bear',
 
     // Vehicles (dumped/abandoned)
     'bicycle',
@@ -285,6 +296,16 @@ class AIAnalysisService {
       'remote': 'debris', // Fixed: E-waste
       'book': 'debris', // Fixed: Paper waste
       'tie': 'debris', // Clothing waste
+      'hair drier': 'debris', // E-waste
+
+      // Cutlery (common outdoor litter)
+      'fork': 'plastic', // Often plastic cutlery
+      'knife': 'plastic', // Often plastic cutlery
+      'spoon': 'plastic', // Often plastic cutlery
+
+      // Other common litter
+      'scissors': 'debris', // Potentially hazardous
+      'teddy bear': 'debris', // Abandoned toys
 
       // Vehicles (dumped/abandoned)
       'bicycle': 'debris',

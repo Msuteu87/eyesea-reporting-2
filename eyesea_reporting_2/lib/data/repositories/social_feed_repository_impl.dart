@@ -57,4 +57,37 @@ class SocialFeedRepositoryImpl implements SocialFeedRepository {
   Future<bool> hasUserThanked(String reportId, String userId) {
     return _dataSource.hasUserThanked(reportId, userId);
   }
+
+  @override
+  Future<List<Map<String, dynamic>>> fetchUnifiedFeed({
+    String? userId,
+    String? country,
+    String? city,
+    double? latitude,
+    double? longitude,
+    int? radiusKm,
+    int limit = 20,
+    int offset = 0,
+  }) {
+    return _dataSource.fetchUnifiedFeed(
+      userId: userId,
+      country: country,
+      city: city,
+      latitude: latitude,
+      longitude: longitude,
+      radiusKm: radiusKm,
+      limit: limit,
+      offset: offset,
+    );
+  }
+
+  @override
+  Future<bool> toggleJoinEvent(String eventId, String userId) {
+    return _dataSource.toggleJoinEvent(eventId, userId);
+  }
+
+  @override
+  Future<int> getEventAttendeeCount(String eventId) {
+    return _dataSource.getEventAttendeeCount(eventId);
+  }
 }

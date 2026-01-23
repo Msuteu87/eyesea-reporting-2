@@ -1,8 +1,10 @@
 // TODO: [MAINTAINABILITY] This file is 577 lines - consider splitting.
 // Extract: EventForm, LocationPicker, DateTimePicker widgets
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:provider/provider.dart';
 import '../../core/services/geocoding_service.dart';
@@ -24,6 +26,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
   final _locationController = TextEditingController();
   final _maxAttendeesController = TextEditingController();
   final _locationFocusNode = FocusNode();
+  final _imagePicker = ImagePicker();
 
   DateTime _startTime = DateTime.now().add(const Duration(days: 1));
   DateTime _endTime = DateTime.now().add(const Duration(days: 1, hours: 2));
@@ -32,6 +35,9 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
   bool _isSearchingLocation = false;
   List<GeocodingResult> _locationResults = [];
   GeocodingResult? _selectedLocation;
+  
+  // Cover image state
+  File? _coverImage;
 
   @override
   void initState() {
@@ -96,6 +102,80 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     });
   }
 
+  /// Show image source picker (camera or gallery)
+  Future<void> _pickImage() async {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    await showModalBottomSheet(
+      context: context,
+      backgroundColor: isDark ? AppColors.darkSurface : Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(LucideIcons.camera, color: AppColors.oceanBlue),
+                title: const Text('Take Photo'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _getImage(ImageSource.camera);
+                },
+              ),
+              ListTile(
+                leading: const Icon(LucideIcons.image, color: AppColors.oceanBlue),
+                title: const Text('Choose from Gallery'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _getImage(ImageSource.gallery);
+                },
+              ),
+              if (_coverImage != null)
+                ListTile(
+                  leading: const Icon(LucideIcons.trash2, color: AppColors.punchRed),
+                  title: const Text('Remove Image'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    setState(() => _coverImage = null);
+                  },
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _getImage(ImageSource source) async {
+    try {
+      final XFile? pickedFile = await _imagePicker.pickImage(
+        source: source,
+        maxWidth: 1920,
+        maxHeight: 1080,
+        imageQuality: 85,
+      );
+
+      if (pickedFile != null && mounted) {
+        setState(() {
+          _coverImage = File(pickedFile.path);
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to pick image: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   Future<void> _selectDateTime(bool isStart) async {
     final initialDate = isStart ? _startTime : _endTime;
     final pickedDate = await showDatePicker(
@@ -153,6 +233,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
         lon: _selectedLocation?.longitude,
         maxAttendees:
             maxAttendeesText.isNotEmpty ? int.tryParse(maxAttendeesText) : null,
+        coverImagePath: _coverImage?.path,
       );
 
       if (!mounted) return;
@@ -234,6 +315,10 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              // Cover Image Picker
+              _buildCoverImagePicker(isDark),
+              const SizedBox(height: 24),
+
               // Event Title
               TextFormField(
                 controller: _titleController,
@@ -573,6 +658,122 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildCoverImagePicker(bool isDark) {
+    return GestureDetector(
+      onTap: _pickImage,
+      child: Container(
+        height: 180,
+        decoration: BoxDecoration(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.05)
+              : Colors.black.withValues(alpha: 0.02),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isDark
+                ? Colors.white.withValues(alpha: 0.1)
+                : Colors.black.withValues(alpha: 0.1),
+            width: 2,
+            style: _coverImage == null ? BorderStyle.solid : BorderStyle.none,
+          ),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: _coverImage != null
+            ? Stack(
+                fit: StackFit.expand,
+                children: [
+                  Image.file(
+                    _coverImage!,
+                    fit: BoxFit.cover,
+                  ),
+                  // Overlay gradient for better text visibility
+                  Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.transparent,
+                          Colors.black.withValues(alpha: 0.5),
+                        ],
+                      ),
+                    ),
+                  ),
+                  // Edit button
+                  Positioned(
+                    bottom: 12,
+                    right: 12,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.6),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            LucideIcons.pencil,
+                            size: 14,
+                            color: Colors.white,
+                          ),
+                          SizedBox(width: 6),
+                          Text(
+                            'Change',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              )
+            : Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppColors.oceanBlue.withValues(alpha: 0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      LucideIcons.imagePlus,
+                      size: 32,
+                      color: AppColors.oceanBlue,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Add Cover Image',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: isDark ? Colors.white : AppColors.darkGunmetal,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Tap to upload a photo',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: isDark
+                          ? Colors.white.withValues(alpha: 0.5)
+                          : Colors.black.withValues(alpha: 0.5),
+                    ),
+                  ),
+                ],
+              ),
       ),
     );
   }

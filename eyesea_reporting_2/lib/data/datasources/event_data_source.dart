@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/utils/logger.dart';
 import '../../domain/entities/event.dart';
@@ -7,6 +8,32 @@ class EventDataSource {
   final SupabaseClient _supabaseClient;
 
   EventDataSource(this._supabaseClient);
+
+  /// Uploads an event cover image to storage and returns the public URL.
+  Future<String?> uploadEventImage(File imageFile) async {
+    try {
+      final userId = _supabaseClient.auth.currentUser?.id;
+      if (userId == null) throw Exception('User not authenticated');
+
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final extension = imageFile.path.split('.').last.toLowerCase();
+      final fileName = '$userId/$timestamp.$extension';
+
+      await _supabaseClient.storage
+          .from('event-images')
+          .upload(fileName, imageFile);
+
+      final publicUrl = _supabaseClient.storage
+          .from('event-images')
+          .getPublicUrl(fileName);
+
+      AppLogger.info('Uploaded event image: $publicUrl');
+      return publicUrl;
+    } catch (e) {
+      AppLogger.error('Error uploading event image', e);
+      return null;
+    }
+  }
 
   /// Creates a new event in the database.
   Future<void> createEvent(Map<String, dynamic> eventData) async {

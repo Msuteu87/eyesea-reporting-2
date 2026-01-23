@@ -190,12 +190,36 @@ class _ProfileScreenState extends State<ProfileScreen>
     setState(() {
       _isEditing = true;
       _editingRole = user?.role;
+      // Initialize editing org/vessel from user's current values (will be matched after orgs load)
       _editingOrg = null;
       _editingVessel = null;
       _organizations = [];
       _editingVessels = [];
     });
-    _fetchOrganizationsForEdit();
+    _fetchOrganizationsForEdit().then((_) {
+      // Pre-select user's current org after organizations are loaded
+      if (user?.orgId != null && _organizations.isNotEmpty) {
+        final currentOrg = _organizations
+            .where((org) => org.id == user!.orgId)
+            .firstOrNull;
+        if (currentOrg != null && mounted) {
+          setState(() => _editingOrg = currentOrg);
+          // If Seafarer, also load their vessels and pre-select current vessel
+          if (user?.role == UserRole.seafarer && user?.currentVesselId != null) {
+            _fetchVesselsForEdit(currentOrg.id).then((_) {
+              if (mounted && _editingVessels.isNotEmpty) {
+                final currentVessel = _editingVessels
+                    .where((v) => v.id == user!.currentVesselId)
+                    .firstOrNull;
+                if (currentVessel != null) {
+                  setState(() => _editingVessel = currentVessel);
+                }
+              }
+            });
+          }
+        }
+      }
+    });
   }
 
   Future<void> _fetchOrganizationsForEdit() async {

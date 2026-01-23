@@ -76,7 +76,7 @@ class ReportViewScreen extends StatelessWidget {
                               ),
                               const SizedBox(width: 4),
                               Text(
-                                '+${report.xpEarned} XP',
+                                '+${report.xpEarned} Credits',
                                 style: TextStyle(
                                   color: Colors.amber[700],
                                   fontWeight: FontWeight.w600,

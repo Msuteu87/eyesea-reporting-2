@@ -54,6 +54,7 @@ import 'domain/repositories/report_repository.dart';
 import 'domain/repositories/social_feed_repository.dart';
 import 'presentation/providers/profile_provider.dart';
 import 'presentation/providers/leaderboard_provider.dart';
+import 'presentation/providers/theme_provider.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -175,11 +176,16 @@ Future<void> main() async {
   // Create events provider for cleanup events
   final eventsProvider = EventsProvider(eventRepository);
 
+  // Initialize theme provider for immediate theme switching
+  final themeProvider = ThemeProvider();
+  await themeProvider.initialize();
+
   final appRouter = AppRouter(authProvider);
 
   runApp(
     MultiProvider(
       providers: [
+        ChangeNotifierProvider<ThemeProvider>.value(value: themeProvider),
         ChangeNotifierProvider.value(value: authProvider),
         Provider<OrganizationRepository>.value(value: orgRepository),
         Provider<EventRepository>.value(value: eventRepository),

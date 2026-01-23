@@ -5,9 +5,9 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../core/services/notification_service.dart';
 import '../../providers/auth_provider.dart';
-import '../../legal/legal_viewer_screen.dart';
+import '../../providers/theme_provider.dart';
+import '../../legal/legal_menu_screen.dart';
 
 class SettingsTab extends StatefulWidget {
   const SettingsTab({super.key});
@@ -17,95 +17,28 @@ class SettingsTab extends StatefulWidget {
 }
 
 class _SettingsTabState extends State<SettingsTab> {
-  // Theme
-  ThemeMode _themeMode = ThemeMode.system;
-
-  // Notifications
-  bool _notificationsEnabled = false;
-  bool _isCheckingNotifications = true;
-
   // Expert Mode (bounding boxes on camera)
   bool _expertModeEnabled = false;
   static const String _expertModeKey = 'expert_mode_enabled';
 
-  late NotificationService _notificationService;
-
   @override
   void initState() {
     super.initState();
-    _notificationService = context.read<NotificationService>();
     _loadSettings();
   }
 
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
 
-    // Load theme preference
-    final themeModeIndex = prefs.getInt('theme_mode') ?? 0;
-    _themeMode = ThemeMode.values[themeModeIndex];
-
     // Load expert mode preference
     _expertModeEnabled = prefs.getBool(_expertModeKey) ?? false;
-
-    // Check notification permission
-    await _checkNotificationPermission();
 
     if (mounted) setState(() {});
   }
 
-  Future<void> _checkNotificationPermission() async {
-    if (!mounted) return;
-    setState(() => _isCheckingNotifications = true);
-    try {
-      _notificationsEnabled = await _notificationService.checkPermission();
-    } catch (_) {
-      _notificationsEnabled = false;
-    } finally {
-      if (mounted) setState(() => _isCheckingNotifications = false);
-    }
-  }
-
   Future<void> _setThemeMode(ThemeMode mode) async {
-    setState(() => _themeMode = mode);
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt('theme_mode', mode.index);
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Theme will apply on next app restart'),
-          backgroundColor: Theme.of(context).colorScheme.primary,
-          duration: const Duration(seconds: 2),
-        ),
-      );
-    }
-  }
-
-  Future<void> _toggleNotifications(bool enabled) async {
-    if (enabled) {
-      final granted = await _notificationService.requestPermission();
-      if (mounted) {
-        setState(() => _notificationsEnabled = granted);
-
-        if (!granted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Please enable notifications in system settings'),
-              backgroundColor: Colors.orange,
-            ),
-          );
-        }
-      }
-    } else {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Disable notifications in system settings'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-      }
-    }
+    // Use ThemeProvider for immediate theme switching
+    await context.read<ThemeProvider>().setThemeMode(mode);
   }
 
   Future<void> _toggleExpertMode(bool enabled) async {
@@ -163,23 +96,11 @@ class _SettingsTabState extends State<SettingsTab> {
     }
   }
 
-  void _openLegalDocument(BuildContext context, String title, String assetPath) {
+  void _openLegalMenu(BuildContext context) {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (context) => LegalViewerScreen(
-          title: title,
-          assetPath: assetPath,
-        ),
+        builder: (context) => const LegalMenuScreen(),
       ),
-    );
-  }
-
-  void _showOpenSourceLicenses(BuildContext context) {
-    showLicensePage(
-      context: context,
-      applicationName: 'Eyesea Reporting',
-      applicationVersion: '1.0.0',
-      applicationLegalese: '© 2025 Marius Catalin Suteu / Eyesea. All rights reserved.',
     );
   }
 
@@ -236,26 +157,6 @@ class _SettingsTabState extends State<SettingsTab> {
 
         const SizedBox(height: 24),
 
-        // Notifications Section
-        _buildSectionHeader(context, 'Notifications', LucideIcons.bell),
-        const SizedBox(height: 12),
-        _buildSettingsCard(
-          context,
-          children: [
-            _buildSwitchTile(
-              context,
-              title: 'Push Notifications',
-              subtitle: 'Get notified about report updates',
-              icon: LucideIcons.bellRing,
-              value: _notificationsEnabled,
-              isLoading: _isCheckingNotifications,
-              onChanged: _toggleNotifications,
-            ),
-          ],
-        ).animate().fadeIn(delay: 150.ms).slideX(begin: 0.1),
-
-        const SizedBox(height: 24),
-
         // Account Section
         _buildSectionHeader(context, 'Account', LucideIcons.user),
         const SizedBox(height: 12),
@@ -291,46 +192,10 @@ class _SettingsTabState extends State<SettingsTab> {
           children: [
             _buildActionTile(
               context,
-              title: 'Terms of Service',
-              subtitle: 'Read our terms and conditions',
-              icon: LucideIcons.fileText,
-              onTap: () => _openLegalDocument(
-                context,
-                'Terms of Service',
-                'assets/legal/terms_of_service.md',
-              ),
-            ),
-            const Divider(height: 1),
-            _buildActionTile(
-              context,
-              title: 'Privacy Policy',
-              subtitle: 'How we handle your data',
-              icon: LucideIcons.shield,
-              onTap: () => _openLegalDocument(
-                context,
-                'Privacy Policy',
-                'assets/legal/privacy_policy.md',
-              ),
-            ),
-            const Divider(height: 1),
-            _buildActionTile(
-              context,
-              title: 'EULA',
-              subtitle: 'End User License Agreement',
-              icon: LucideIcons.fileBadge,
-              onTap: () => _openLegalDocument(
-                context,
-                'EULA',
-                'assets/legal/eula.md',
-              ),
-            ),
-            const Divider(height: 1),
-            _buildActionTile(
-              context,
-              title: 'Open Source Licenses',
-              subtitle: 'Third-party software licenses',
-              icon: LucideIcons.code2,
-              onTap: () => _showOpenSourceLicenses(context),
+              title: 'Legal',
+              subtitle: 'Terms, Privacy Policy, EULA',
+              icon: LucideIcons.scale,
+              onTap: () => _openLegalMenu(context),
             ),
           ],
         ).animate().fadeIn(delay: 250.ms).slideX(begin: 0.1),
@@ -467,7 +332,8 @@ class _SettingsTabState extends State<SettingsTab> {
     ThemeMode mode,
   ) {
     final theme = Theme.of(context);
-    final isSelected = _themeMode == mode;
+    final currentMode = context.watch<ThemeProvider>().themeMode;
+    final isSelected = currentMode == mode;
 
     return Expanded(
       child: GestureDetector(

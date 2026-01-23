@@ -40,6 +40,48 @@ class ReportImageHeader extends StatelessWidget {
             Image.file(
               imageFile,
               fit: BoxFit.cover,
+              frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+                if (wasSynchronouslyLoaded) return child;
+                return AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 200),
+                  child: frame != null
+                      ? child
+                      : Container(
+                          color: isDark ? AppColors.deepNavy : Colors.grey[300],
+                          child: Center(
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: isDark ? Colors.white70 : AppColors.oceanBlue,
+                            ),
+                          ),
+                        ),
+                );
+              },
+              errorBuilder: (context, error, stackTrace) {
+                return Container(
+                  color: isDark ? AppColors.deepNavy : Colors.grey[300],
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          LucideIcons.imageOff,
+                          size: 48,
+                          color: isDark ? Colors.white54 : Colors.grey[600],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Image not available',
+                          style: TextStyle(
+                            color: isDark ? Colors.white54 : Colors.grey[600],
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
             ),
             // Gradient overlay for readability
             Container(

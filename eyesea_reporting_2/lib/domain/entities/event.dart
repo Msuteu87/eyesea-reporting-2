@@ -16,6 +16,7 @@ class EventEntity {
   final DateTime createdAt;
   final int attendeeCount;
   final bool isAttending;
+  final String? coverImageUrl;
 
   const EventEntity({
     required this.id,
@@ -34,6 +35,7 @@ class EventEntity {
     required this.createdAt,
     this.attendeeCount = 0,
     this.isAttending = false,
+    this.coverImageUrl,
   });
 
   factory EventEntity.fromJson(Map<String, dynamic> json) {
@@ -54,6 +56,7 @@ class EventEntity {
       createdAt: DateTime.tryParse(json['created_at'] as String? ?? '') ?? DateTime.now(),
       attendeeCount: (json['attendee_count'] as num?)?.toInt() ?? 0,
       isAttending: json['is_attending'] as bool? ?? false,
+      coverImageUrl: json['cover_image_url'] as String?,
     );
   }
 
@@ -128,6 +131,7 @@ class EventEntity {
     DateTime? createdAt,
     int? attendeeCount,
     bool? isAttending,
+    String? coverImageUrl,
   }) {
     return EventEntity(
       id: id ?? this.id,
@@ -146,6 +150,7 @@ class EventEntity {
       createdAt: createdAt ?? this.createdAt,
       attendeeCount: attendeeCount ?? this.attendeeCount,
       isAttending: isAttending ?? this.isAttending,
+      coverImageUrl: coverImageUrl ?? this.coverImageUrl,
     );
   }
 }

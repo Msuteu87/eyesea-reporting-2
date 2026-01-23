@@ -73,8 +73,14 @@ class AuthRepositoryImpl implements AuthRepository {
 
     if (role != null) {
       updates['role'] = role.toString().split('.').last;
+
+      // When switching to a non-Seafarer role, clear the vessel assignment
+      if (role != UserRole.seafarer) {
+        updates['current_vessel_id'] = null;
+      }
     }
 
+    // Only set vessel_id if explicitly provided (for Seafarers)
     if (currentVesselId != null) {
       updates['current_vessel_id'] = currentVesselId;
     }

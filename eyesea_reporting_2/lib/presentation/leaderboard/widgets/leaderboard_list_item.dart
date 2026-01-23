@@ -80,7 +80,7 @@ class LeaderboardListItem extends StatelessWidget {
               ),
             ),
 
-            // XP badge
+            // Credits badge
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
@@ -88,7 +88,7 @@ class LeaderboardListItem extends StatelessWidget {
                 borderRadius: BorderRadius.circular(16),
               ),
               child: Text(
-                '${entry.totalXp} XP',
+                '${entry.totalXp} Credits',
                 style: const TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,

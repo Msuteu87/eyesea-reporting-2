@@ -1,15 +1,15 @@
 import '../../domain/entities/report.dart';
 
-// TODO: [DOCUMENTATION] Add player-facing explanation of XP system
-// Current: XP calculation has base + bonuses but no in-app explanation
-// Fix: Create wiki/help screen explaining how XP is earned:
-//   - Base: 25 XP per report
-//   - Photo bonus: +5 XP
-//   - Location bonus: +10 XP
-//   - Beach/water bonus: +10 XP
-//   - Severity bonus: 0-20 XP based on severity level
-//   - Multi-type bonus: +5 XP per additional pollution type
-//   - Item count bonus: +1 XP per 5 items (capped at 50 XP)
+// TODO: [DOCUMENTATION] Add player-facing explanation of Credits system
+// Current: Credits calculation has base + bonuses but no in-app explanation
+// Fix: Create wiki/help screen explaining how EyeSea Credits are earned:
+//   - Base: 25 Credits per report
+//   - Photo bonus: +5 Credits
+//   - Location bonus: +10 Credits
+//   - Beach/water bonus: +10 Credits
+//   - Severity bonus: 0-20 Credits based on severity level
+//   - Multi-type bonus: +5 Credits per additional pollution type
+//   - Item count bonus: +1 Credit per 5 items (capped at 50 Credits)
 
 // TODO: [MAINTAINABILITY] Move weight constants to config/database
 // Current: _averageWeights hardcoded - can't adjust based on real data
@@ -568,6 +568,16 @@ class PollutionCalculations {
     'remote': PollutionType.debris,
     'book': PollutionType.debris,
     'tie': PollutionType.debris,
+    'hair drier': PollutionType.debris,
+
+    // Cutlery (common outdoor litter)
+    'fork': PollutionType.plastic,
+    'knife': PollutionType.plastic,
+    'spoon': PollutionType.plastic,
+
+    // Other common litter
+    'scissors': PollutionType.debris,
+    'teddy bear': PollutionType.debris,
 
     // Vehicles (dumped/abandoned)
     'bicycle': PollutionType.debris,

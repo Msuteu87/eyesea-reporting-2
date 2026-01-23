@@ -24,6 +24,8 @@ class NotificationListItem extends StatelessWidget {
         return (LucideIcons.shieldCheck, AppColors.electricNavy);
       case 'badge_earned':
         return (LucideIcons.award, AppColors.amberGlow);
+      case 'event_created':
+        return (LucideIcons.calendarPlus, AppColors.lightSeaGreen);
       case 'system':
       default:
         return (LucideIcons.bell, Colors.grey);

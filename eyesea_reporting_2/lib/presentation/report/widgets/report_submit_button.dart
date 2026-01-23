@@ -3,7 +3,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../../core/theme/app_colors.dart';
 
-/// A submit button for reports that shows XP earned and handles people detection blocking.
+/// A submit button for reports that shows EyeSea Credits earned and handles people detection blocking.
 class ReportSubmitButton extends StatelessWidget {
   final bool isSubmitting;
   final bool hasPeopleDetected;
@@ -103,7 +103,7 @@ class ReportSubmitButton extends StatelessWidget {
         Text(
           hasPeopleDetected
               ? 'Cannot Submit (People Detected)'
-              : 'Submit Report (+$totalXP XP)',
+              : 'Submit Report (+$totalXP Credits)',
           style: const TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.w700,

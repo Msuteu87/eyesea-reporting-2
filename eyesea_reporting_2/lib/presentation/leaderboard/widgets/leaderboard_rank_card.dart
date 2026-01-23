@@ -90,7 +90,7 @@ class LeaderboardRankCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '${rank.totalXp} XP',
+                    '${rank.totalXp} Credits',
                     style: TextStyle(
                       fontSize: 14,
                       color: Colors.white.withValues(alpha: 0.9),

@@ -1,3 +1,4 @@
+import 'dart:io';
 import '../../domain/entities/event.dart';
 import '../../domain/repositories/event_repository.dart';
 import '../datasources/event_data_source.dart';
@@ -20,9 +21,19 @@ class EventRepositoryImpl implements EventRepository {
     double? lat,
     double? lon,
     int? maxAttendees,
+    String? coverImagePath,
   }) async {
     final user = _supabaseClient.auth.currentUser;
     if (user == null) throw Exception('User not logged in');
+
+    // Upload cover image if provided
+    String? coverImageUrl;
+    if (coverImagePath != null && coverImagePath.isNotEmpty) {
+      final imageFile = File(coverImagePath);
+      if (imageFile.existsSync()) {
+        coverImageUrl = await _dataSource.uploadEventImage(imageFile);
+      }
+    }
 
     final eventData = {
       'organizer_id': user.id,
@@ -34,6 +45,7 @@ class EventRepositoryImpl implements EventRepository {
       'status': 'planned',
       'location': 'POINT(${lon ?? 0} ${lat ?? 0})', // PostGIS format
       if (maxAttendees != null) 'max_attendees': maxAttendees,
+      if (coverImageUrl != null) 'cover_image_url': coverImageUrl,
     };
 
     await _dataSource.createEvent(eventData);

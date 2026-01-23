@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:provider/provider.dart';
 import '../../core/theme/app_colors.dart';
+import '../../domain/entities/unified_feed_item.dart';
 import '../providers/auth_provider.dart';
 import '../providers/social_feed_provider.dart';
 import 'widgets/feed_card.dart';
+import 'widgets/event_feed_card.dart';
 import 'widgets/feed_filter_control.dart';
 import 'widgets/offline_banner.dart';
 
@@ -174,11 +176,20 @@ class _SocialFeedScreenState extends State<SocialFeedScreen> {
           }
 
           final item = provider.items[index];
-          return FeedCard(
-            item: item,
-            canThank: currentUserId != null && item.userId != currentUserId,
-            onThankPressed: () => provider.toggleThank(item.id),
-          );
+          
+          // Pattern matching for different item types
+          return switch (item) {
+            ReportFeedItem reportItem => FeedCard(
+                item: reportItem,
+                canThank: currentUserId != null && reportItem.userId != currentUserId,
+                onThankPressed: () => provider.toggleThank(reportItem.id),
+              ),
+            EventFeedItem eventItem => EventFeedCard(
+                item: eventItem,
+                canJoin: provider.canJoin(eventItem),
+                onJoinPressed: () => provider.toggleJoinEvent(eventItem.id),
+              ),
+          };
         },
       ),
     );

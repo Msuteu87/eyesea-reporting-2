@@ -3,7 +3,7 @@ import 'dart:developer';
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart' as geo;
 import '../../core/services/connectivity_service.dart';
-import '../../domain/entities/feed_item.dart';
+import '../../domain/entities/unified_feed_item.dart';
 import '../../domain/repositories/social_feed_repository.dart';
 
 /// Filter options for the social feed
@@ -26,7 +26,7 @@ class SocialFeedProvider extends ChangeNotifier {
   final SocialFeedRepository _repository;
   final ConnectivityService _connectivityService;
 
-  List<FeedItem> _items = [];
+  List<UnifiedFeedItem> _items = [];
   bool _isLoading = false;
   bool _hasMore = true;
   String? _error;
@@ -61,7 +61,7 @@ class SocialFeedProvider extends ChangeNotifier {
   }
 
   // Getters
-  List<FeedItem> get items => _items;
+  List<UnifiedFeedItem> get items => _items;
   bool get isLoading => _isLoading;
   bool get hasMore => _hasMore;
   String? get error => _error;
@@ -198,7 +198,7 @@ class SocialFeedProvider extends ChangeNotifier {
 
       log('Loading feed: filter=$_currentFilter, lat=$latitude, lng=$longitude, radius=${radiusKm}km, country=$country, city=$city, offset=$_currentOffset');
 
-      final data = await _repository.fetchFeed(
+      final data = await _repository.fetchUnifiedFeed(
         userId: _currentUserId,
         country: country,
         city: city,
@@ -209,7 +209,7 @@ class SocialFeedProvider extends ChangeNotifier {
         offset: _currentOffset,
       );
 
-      var newItems = data.map((json) => FeedItem.fromJson(json)).toList();
+      var newItems = data.map((json) => UnifiedFeedItem.fromJson(json)).toList();
 
       // Auto-expand radius if using proximity and got too few results
       if (_currentFilter == FeedFilter.nearby &&
@@ -244,7 +244,7 @@ class SocialFeedProvider extends ChangeNotifier {
 
   /// Try expanding the search radius to find more results
   /// Returns expanded items if successful, null if no expansion needed/possible
-  Future<List<FeedItem>?> _tryExpandRadius(List<FeedItem> currentItems) async {
+  Future<List<UnifiedFeedItem>?> _tryExpandRadius(List<UnifiedFeedItem> currentItems) async {
     if (_userLatitude == null || _userLongitude == null) return null;
 
     // Find current radius index
@@ -272,7 +272,7 @@ class SocialFeedProvider extends ChangeNotifier {
         // Found a radius with enough items, fetch them
         _currentRadiusKm = nextRadius;
 
-        final data = await _repository.fetchFeed(
+        final data = await _repository.fetchUnifiedFeed(
           userId: _currentUserId,
           latitude: _userLatitude,
           longitude: _userLongitude,
@@ -282,7 +282,7 @@ class SocialFeedProvider extends ChangeNotifier {
         );
 
         log('Expanded to ${nextRadius}km radius, got ${data.length} items');
-        return data.map((json) => FeedItem.fromJson(json)).toList();
+        return data.map((json) => UnifiedFeedItem.fromJson(json)).toList();
       }
     }
 
@@ -291,7 +291,7 @@ class SocialFeedProvider extends ChangeNotifier {
     if (_currentRadiusKm != maxRadius) {
       _currentRadiusKm = maxRadius;
 
-      final data = await _repository.fetchFeed(
+      final data = await _repository.fetchUnifiedFeed(
         userId: _currentUserId,
         latitude: _userLatitude,
         longitude: _userLongitude,
@@ -301,7 +301,7 @@ class SocialFeedProvider extends ChangeNotifier {
       );
 
       log('Expanded to max radius ${maxRadius}km, got ${data.length} items');
-      return data.map((json) => FeedItem.fromJson(json)).toList();
+      return data.map((json) => UnifiedFeedItem.fromJson(json)).toList();
     }
 
     return null;
@@ -321,6 +321,12 @@ class SocialFeedProvider extends ChangeNotifier {
     }
 
     final item = _items[index];
+    
+    // Can only thank reports, not events
+    if (item is! ReportFeedItem) {
+      log('Cannot thank: item is not a report');
+      return;
+    }
 
     // Cannot thank own report
     if (item.userId == _currentUserId) {
@@ -361,9 +367,84 @@ class SocialFeedProvider extends ChangeNotifier {
     }
   }
 
-  /// Check if current user can thank a specific item
-  bool canThank(FeedItem item) {
+  /// Toggle join status for an event (optimistic update)
+  Future<void> toggleJoinEvent(String eventId) async {
+    if (_currentUserId == null) {
+      log('Cannot join event: user not authenticated');
+      return;
+    }
+
+    final index = _items.indexWhere((item) => item.id == eventId);
+    if (index == -1) {
+      log('Cannot join event: item not found');
+      return;
+    }
+
+    final item = _items[index];
+    
+    // Can only join events, not reports
+    if (item is! EventFeedItem) {
+      log('Cannot join: item is not an event');
+      return;
+    }
+
+    // Cannot join own event (organizers are already participating)
+    if (item.userId == _currentUserId) {
+      log('Cannot join own event');
+      return;
+    }
+
+    // Cannot join if event is full and not already joined
+    if (item.isFull && !item.userHasJoined) {
+      log('Cannot join: event is full');
+      return;
+    }
+
+    // Optimistic update
+    final newJoined = !item.userHasJoined;
+    final newCount = item.attendeeCount + (newJoined ? 1 : -1);
+
+    _items[index] = item.copyWith(
+      userHasJoined: newJoined,
+      attendeeCount: newCount,
+    );
+    notifyListeners();
+
+    log('Optimistic join update: joined=$newJoined, count=$newCount');
+
+    try {
+      final actuallyJoined =
+          await _repository.toggleJoinEvent(eventId, _currentUserId!);
+
+      // Verify server state matches optimistic update
+      if (actuallyJoined != newJoined) {
+        log('Server state differs from optimistic update, correcting');
+        _items[index] = item.copyWith(
+          userHasJoined: actuallyJoined,
+          attendeeCount: item.attendeeCount + (actuallyJoined ? 1 : -1),
+        );
+        notifyListeners();
+      }
+    } catch (e) {
+      // Revert on error
+      log('Error toggling event join, reverting: $e');
+      _items[index] = item;
+      notifyListeners();
+    }
+  }
+
+  /// Check if current user can thank a specific report
+  bool canThank(ReportFeedItem item) {
     return _currentUserId != null && item.userId != _currentUserId;
+  }
+
+  /// Check if current user can join a specific event
+  bool canJoin(EventFeedItem item) {
+    if (_currentUserId == null) return false;
+    if (item.userId == _currentUserId) return false; // Organizer
+    if (item.isFull && !item.userHasJoined) return false;
+    if (item.status == 'cancelled' || item.status == 'completed') return false;
+    return true;
   }
 
   @override

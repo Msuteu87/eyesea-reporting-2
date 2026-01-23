@@ -63,6 +63,7 @@ class EventsProvider with ChangeNotifier {
   }
 
   /// Creates a new event.
+  /// [coverImagePath] is the local file path of the cover image to upload.
   Future<void> createEvent({
     required String title,
     required String description,
@@ -72,6 +73,7 @@ class EventsProvider with ChangeNotifier {
     double? lat,
     double? lon,
     int? maxAttendees,
+    String? coverImagePath,
   }) async {
     try {
       await _repository.createEvent(
@@ -83,6 +85,7 @@ class EventsProvider with ChangeNotifier {
         lat: lat,
         lon: lon,
         maxAttendees: maxAttendees,
+        coverImagePath: coverImagePath,
       );
       _error = null;
     } catch (e) {

@@ -268,11 +268,15 @@ class NotificationService {
   }
 
   /// Load existing notifications from database
+  /// Filters out expired notifications (where expires_at < now)
   Future<void> _loadNotifications() async {
     try {
+      final now = DateTime.now().toUtc().toIso8601String();
+      
       final response = await _supabase
           .from('notifications')
           .select()
+          .or('expires_at.is.null,expires_at.gt.$now')
           .order('created_at', ascending: false)
           .limit(_maxNotifications);
 

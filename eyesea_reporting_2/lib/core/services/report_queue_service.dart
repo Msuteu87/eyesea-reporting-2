@@ -303,18 +303,23 @@ class ReportQueueService {
         final createdReport = await _dataSource.createReport(reportData);
         final reportId = createdReport['id'] as String;
 
-        // Upload image
+        // Upload image - required for report integrity
         final imageFile = File(report.imagePath);
-        if (imageFile.existsSync()) {
-          final publicUrl = await _dataSource.uploadReportImage(
-            user.id,
-            reportId,
-            imageFile,
-          );
-
-          // Create image record
-          await _dataSource.createReportImageRecord(reportId, publicUrl, true);
+        if (!imageFile.existsSync()) {
+          // Image file missing - cannot create report without image
+          // Mark as failed so user can see the issue and retake photo
+          AppLogger.error('Image file missing for report ${report.id}: ${report.imagePath}');
+          throw Exception('Image file not found. Please retake the photo and submit again.');
         }
+
+        final publicUrl = await _dataSource.uploadReportImage(
+          user.id,
+          reportId,
+          imageFile,
+        );
+
+        // Create image record
+        await _dataSource.createReportImageRecord(reportId, publicUrl, true);
 
         // Create AI analysis record
         await _dataSource.createAIAnalysisRecord(

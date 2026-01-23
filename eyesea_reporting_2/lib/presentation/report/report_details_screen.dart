@@ -44,13 +44,15 @@ class ReportDetailsScreen extends StatefulWidget {
 class _ReportDetailsScreenState extends State<ReportDetailsScreen> {
   // Changed from single type to a Set of selected types for multi-selection
   Set<PollutionType> _selectedPollutionTypes = {PollutionType.plastic};
-  int _severity = 3;
+  // Start with severity 1 (Minor) for 1 default item; AI analysis will recalculate
+  int _severity = 1;
   bool _isSubmitting = false;
   Point? _currentLocation;
   String? _city;
   String? _country;
   bool _isAnalyzing = false;
   List<String> _sceneLabels = [];
+  bool _imageFileValid = true;
 
   late final File _imageFile;
 
@@ -58,6 +60,37 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen> {
   void initState() {
     super.initState();
     _imageFile = File(widget.imagePath);
+
+    // Validate image file exists before proceeding
+    if (!_imageFile.existsSync()) {
+      _imageFileValid = false;
+      AppLogger.error('Image file not found: ${widget.imagePath}');
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Row(
+              children: [
+                Icon(LucideIcons.imageOff, color: Colors.white, size: 20),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Text('Image not found. Please retake the photo.'),
+                ),
+              ],
+            ),
+            backgroundColor: Colors.orange.shade700,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+        // Navigate back to camera after showing message
+        Future.delayed(const Duration(seconds: 2), () {
+          if (mounted) Navigator.pop(context);
+        });
+      });
+      return;
+    }
+
     _detectLocation();
     // Run analysis after build frame to access context providers safely
     WidgetsBinding.instance.addPostFrameCallback((_) => _analyzeImage());
@@ -276,7 +309,9 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen> {
   }
 
   bool _hasPeopleDetected = false;
-  Map<PollutionType, int> _typeCounts = {};
+  // Initialize with default count of 1 for the default selected type (plastic)
+  // This ensures the impact card shows correctly before AI analysis completes
+  Map<PollutionType, int> _typeCounts = {PollutionType.plastic: 1};
   Map<PollutionType, int> _aiBaselineCounts =
       {}; // Store AI detection baseline for fraud comparison
 
@@ -541,6 +576,39 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final primaryColor = theme.colorScheme.primary;
+
+    // Show loading state if image file is invalid (will auto-navigate back)
+    if (!_imageFileValid) {
+      return Scaffold(
+        backgroundColor: isDark ? AppColors.deepNavy : Colors.grey[50],
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                LucideIcons.imageOff,
+                size: 64,
+                color: isDark ? Colors.white54 : Colors.grey[400],
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Image not found',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  color: isDark ? Colors.white70 : Colors.grey[600],
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Returning to camera...',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: isDark ? Colors.white54 : Colors.grey[500],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
 
     return Scaffold(
       backgroundColor: isDark ? AppColors.deepNavy : Colors.grey[50],

@@ -192,12 +192,7 @@ class _MapPickerBottomSheetState extends State<MapPickerBottomSheet> {
             child: SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-                onPressed: () {
-                  Navigator.pop(
-                    context,
-                    Point(coordinates: Position(_selectedLng, _selectedLat)),
-                  );
-                },
+                onPressed: _confirmLocation,
                 icon: const Icon(LucideIcons.check),
                 label: const Text('Confirm Location'),
                 style: ElevatedButton.styleFrom(
@@ -251,5 +246,32 @@ class _MapPickerBottomSheetState extends State<MapPickerBottomSheet> {
       _selectedLat = center.coordinates.lat.toDouble();
       _selectedLng = center.coordinates.lng.toDouble();
     });
+  }
+
+  /// Confirms the location by fetching the current camera position.
+  /// This ensures we return the actual center position, not potentially stale state.
+  Future<void> _confirmLocation() async {
+    if (_mapController == null) {
+      // Fallback to state values if controller not available
+      Navigator.pop(
+        context,
+        Point(coordinates: Position(_selectedLng, _selectedLat)),
+      );
+      return;
+    }
+
+    // Get the current camera position to ensure accuracy
+    final cameraState = await _mapController!.getCameraState();
+    final center = cameraState.center;
+
+    if (mounted) {
+      Navigator.pop(
+        context,
+        Point(coordinates: Position(
+          center.coordinates.lng.toDouble(),
+          center.coordinates.lat.toDouble(),
+        )),
+      );
+    }
   }
 }

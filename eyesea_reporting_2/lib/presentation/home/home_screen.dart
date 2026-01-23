@@ -65,6 +65,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   bool _showSearchAreaButton = false;
   ViewportBounds? _lastFetchedBounds;
 
+  // Track if filter chips are expanded (for positioning search button)
+  bool _filtersExpanded = false;
+
   // Mapbox style: dynamic based on theme
   String get _mapStyle {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -415,54 +418,73 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  /// Handle camera movement
+  /// Handle camera movement - hide search button during pan, handle heatmap mode
   void _onCameraChanged(CameraChangedEventData data) {
-    // Debounce camera changes
+    // Immediately hide search button when camera starts moving
+    // This prevents flicker and gives cleaner UX
+    if (_showSearchAreaButton && !_reportsProvider!.isHeatmapEnabled) {
+      setState(() {
+        _showSearchAreaButton = false;
+      });
+    }
+
+    // Debounce for heatmap mode auto-reload only
     _viewportDebounce?.cancel();
-    _viewportDebounce = Timer(const Duration(milliseconds: 300), () async {
+    _viewportDebounce = Timer(const Duration(milliseconds: 500), () async {
       if (!mounted || _mapboxMap == null) return;
+
+      final provider = _reportsProvider;
+      if (provider == null || !provider.isHeatmapEnabled) return;
 
       try {
         final currentBounds =
             await MapBoundsHelper.getViewportBounds(_mapboxMap!);
 
-        // Re-check mounted after async gap before using context
         if (!mounted) return;
 
-        final provider = context.read<ReportsMapProvider>();
-
-        if (provider.isHeatmapEnabled) {
-          // Heatmap Mode: Automatically reload heatmap data for new viewport
-          await provider.reloadHeatmapForViewport(
-            minLat: currentBounds.minLat,
-            maxLat: currentBounds.maxLat,
-            minLng: currentBounds.minLng,
-            maxLng: currentBounds.maxLng,
-          );
-          // Hide search button in heatmap mode
-          if (_showSearchAreaButton) {
-            setState(() {
-              _showSearchAreaButton = false;
-            });
-          }
-        } else {
-          // Normal Mode: Check if we need to show "Search this area" button
-          // Check if viewport moved significantly outside last fetched bounds
-          final shouldShowButton = MapBoundsHelper.isOutsideFetchedBounds(
-            currentBounds,
-            _lastFetchedBounds,
-          );
-
-          if (shouldShowButton != _showSearchAreaButton) {
-            setState(() {
-              _showSearchAreaButton = shouldShowButton;
-            });
-          }
-        }
+        // Heatmap Mode: Automatically reload heatmap data for new viewport
+        await provider.reloadHeatmapForViewport(
+          minLat: currentBounds.minLat,
+          maxLat: currentBounds.maxLat,
+          minLng: currentBounds.minLng,
+          maxLng: currentBounds.maxLng,
+        );
       } catch (e) {
         AppLogger.debug('Error in camera changed handler: $e');
       }
     });
+  }
+
+  /// Handle map idle - show search button when map settles (no race conditions)
+  void _onMapIdle(MapIdleEventData data) async {
+    if (!mounted || _mapboxMap == null) return;
+
+    final provider = _reportsProvider;
+    if (provider == null) return;
+
+    // Don't show search button in heatmap mode
+    if (provider.isHeatmapEnabled) return;
+
+    try {
+      final currentBounds =
+          await MapBoundsHelper.getViewportBounds(_mapboxMap!);
+
+      if (!mounted) return;
+
+      // Check if viewport moved significantly outside last fetched bounds
+      final shouldShowButton = MapBoundsHelper.isOutsideFetchedBounds(
+        currentBounds,
+        _lastFetchedBounds,
+      );
+
+      if (shouldShowButton != _showSearchAreaButton) {
+        setState(() {
+          _showSearchAreaButton = shouldShowButton;
+        });
+      }
+    } catch (e) {
+      AppLogger.debug('Error in map idle handler: $e');
+    }
   }
 
   /// Search for reports in the current viewport area
@@ -536,6 +558,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   styleUri: _mapStyle,
                   onMapCreated: _onMapCreated,
                   onCameraChangeListener: _onCameraChanged,
+                  onMapIdleListener: _onMapIdle,
                 ),
 
           // Floating search bar with user avatar (top)
@@ -545,16 +568,24 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             right: 16,
             child: MapSearchBar(
               onLocationSelected: _flyToLocation,
+              onFiltersExpandedChanged: (expanded) {
+                setState(() {
+                  _filtersExpanded = expanded;
+                });
+              },
             ),
           ),
 
           // "Search this area" button (appears when user pans to new area)
+          // Position adjusts based on whether filter chips are expanded
           AnimatedPositioned(
             duration: const Duration(milliseconds: 200),
             curve: Curves.easeOutCubic,
+            // When filters expanded: position below filter chips (~140px)
+            // When filters collapsed: position below search bar (~80px)
             top: _showSearchAreaButton
-                ? MediaQuery.of(context).padding.top + 80
-                : MediaQuery.of(context).padding.top + 50,
+                ? MediaQuery.of(context).padding.top + (_filtersExpanded ? 140 : 80)
+                : MediaQuery.of(context).padding.top + (_filtersExpanded ? 100 : 50),
             left: 0,
             right: 0,
             child: AnimatedOpacity(
