@@ -53,6 +53,29 @@ class AuthDataSource {
     }
   }
 
+  /// Send password reset email
+  Future<void> resetPasswordForEmail(String email) async {
+    try {
+      await _supabase.auth.resetPasswordForEmail(
+        email,
+        redirectTo: 'com.mariussuteu.eyesea.eyeseareporting://reset-callback',
+      );
+    } catch (e, stackTrace) {
+      throw ErrorMapper.mapAuthError(e, stackTrace);
+    }
+  }
+
+  /// Update user's password (called after clicking reset link)
+  Future<void> updatePassword(String newPassword) async {
+    try {
+      await _supabase.auth.updateUser(
+        UserAttributes(password: newPassword),
+      );
+    } catch (e, stackTrace) {
+      throw ErrorMapper.mapAuthError(e, stackTrace);
+    }
+  }
+
   User? get currentUser => _supabase.auth.currentUser;
 
   Stream<AuthState> get onAuthStateChange => _supabase.auth.onAuthStateChange;

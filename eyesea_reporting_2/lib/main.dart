@@ -182,6 +182,18 @@ Future<void> main() async {
 
   final appRouter = AppRouter(authProvider);
 
+  // Listen for PASSWORD_RECOVERY event to navigate to reset password screen
+  supabaseClient.auth.onAuthStateChange.listen((data) {
+    final event = data.event;
+    if (event == AuthChangeEvent.passwordRecovery) {
+      AppLogger.info('Password recovery event detected - navigating to reset screen');
+      // Small delay to ensure router is ready
+      Future.delayed(const Duration(milliseconds: 100), () {
+        appRouter.router.go('/reset-password');
+      });
+    }
+  });
+
   runApp(
     MultiProvider(
       providers: [

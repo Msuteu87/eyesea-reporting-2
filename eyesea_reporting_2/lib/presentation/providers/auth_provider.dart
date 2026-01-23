@@ -245,6 +245,22 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  /// Update user's password (called after clicking reset link in email)
+  Future<void> updatePassword(String newPassword) async {
+    _isLoading = true;
+    notifyListeners();
+    try {
+      await _authRepository.updatePassword(newPassword);
+      AppLogger.info('Password updated successfully');
+    } catch (e) {
+      AppLogger.error('Password update failed: $e');
+      rethrow;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
   Future<void> signInWithOAuth(OAuthProvider provider) async {
     _isLoading = true;
     notifyListeners();

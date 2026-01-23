@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../home/home_screen.dart';
 import '../auth/login_screen.dart';
 import '../auth/sign_up_screen.dart';
+import '../auth/reset_password_screen.dart';
 import '../onboarding/onboarding_screen.dart';
 import '../profile/profile_screen.dart';
 import '../leaderboard/leaderboard_screen.dart';
@@ -34,6 +35,7 @@ class AppRouter {
   static const String profile = '/profile';
   static const String report = '/report';
   static const String cameraCapture = '/camera-capture';
+  static const String resetPassword = '/reset-password';
 
   void markSplashComplete() {
     _splashComplete = true;
@@ -68,6 +70,7 @@ class AppRouter {
           final isLoggingIn = state.uri.toString() == login;
           final isOnboarding = state.uri.toString() == onboarding;
           final isSignup = state.uri.toString() == '/signup';
+          final isResetPassword = state.uri.toString() == resetPassword;
 
           // Redirect from splash after complete
           if (isSplash && _splashComplete) {
@@ -75,6 +78,9 @@ class AppRouter {
             if (!isOnboardingComplete) return onboarding;
             return home;
           }
+
+          // Allow reset password screen without full auth (recovery session)
+          if (isResetPassword) return null;
 
           if (!isLoggedIn) {
             return (isLoggingIn || isSignup) ? null : login;
@@ -161,6 +167,11 @@ class AppRouter {
             path: '/signup',
             name: 'signup',
             builder: (context, state) => const SignUpScreen(),
+          ),
+          GoRoute(
+            path: resetPassword,
+            name: 'reset-password',
+            builder: (context, state) => const ResetPasswordScreen(),
           ),
           GoRoute(
             path: onboarding,

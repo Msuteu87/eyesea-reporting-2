@@ -40,4 +40,10 @@ abstract class AuthRepository {
 
   /// Fetches the latest user profile data from the remote source.
   Future<UserEntity?> fetchCurrentUser();
+
+  /// Sends a password reset email to the specified email address.
+  Future<void> resetPasswordForEmail(String email);
+
+  /// Updates the user's password (called after clicking reset link).
+  Future<void> updatePassword(String newPassword);
 }

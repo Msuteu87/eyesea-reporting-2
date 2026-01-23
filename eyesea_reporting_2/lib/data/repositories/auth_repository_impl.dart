@@ -212,4 +212,14 @@ class AuthRepositoryImpl implements AuthRepository {
       ambassadorRegionName: profile?['ambassador_region_name'],
     );
   }
+
+  @override
+  Future<void> resetPasswordForEmail(String email) async {
+    await _dataSource.resetPasswordForEmail(email);
+  }
+
+  @override
+  Future<void> updatePassword(String newPassword) async {
+    await _dataSource.updatePassword(newPassword);
+  }
 }

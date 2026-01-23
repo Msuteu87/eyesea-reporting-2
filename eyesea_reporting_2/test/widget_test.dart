@@ -61,6 +61,10 @@ class MockAuthRepository implements AuthRepository {
   }) async {}
   @override
   Future<void> uploadAvatar(dynamic imageFile) async {}
+  @override
+  Future<void> resetPasswordForEmail(String email) async {}
+  @override
+  Future<void> updatePassword(String newPassword) async {}
 }
 
 void main() {
