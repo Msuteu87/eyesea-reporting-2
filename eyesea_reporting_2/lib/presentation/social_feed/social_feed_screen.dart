@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:provider/provider.dart';
 import '../../core/theme/app_colors.dart';
+import '../../domain/entities/event.dart';
 import '../../domain/entities/unified_feed_item.dart';
 import '../providers/auth_provider.dart';
 import '../providers/social_feed_provider.dart';
+import '../events/widgets/event_detail_modal.dart';
 import 'widgets/feed_card.dart';
 import 'widgets/event_feed_card.dart';
 import 'widgets/feed_filter_control.dart';
@@ -25,6 +27,27 @@ class _SocialFeedScreenState extends State<SocialFeedScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initializeFeed();
     });
+  }
+
+  void _showEventDetails(BuildContext context, EventFeedItem item) {
+    // Convert EventFeedItem to EventEntity for the detail modal
+    final event = EventEntity(
+      id: item.id,
+      organizerId: item.userId ?? '',
+      organizerName: item.displayName ?? 'Anonymous',
+      organizerAvatar: item.avatarUrl,
+      title: item.title,
+      description: item.description ?? '',
+      address: item.address,
+      startTime: item.startTime,
+      endTime: item.endTime ?? item.startTime.add(const Duration(hours: 2)),
+      createdAt: item.createdAt,
+      maxAttendees: item.maxAttendees,
+      attendeeCount: item.attendeeCount,
+      isAttending: item.userHasJoined,
+      status: item.status,
+    );
+    EventDetailModal.show(context, event);
   }
 
   Future<void> _initializeFeed() async {
@@ -178,18 +201,23 @@ class _SocialFeedScreenState extends State<SocialFeedScreen> {
           final item = provider.items[index];
           
           // Pattern matching for different item types
-          return switch (item) {
-            ReportFeedItem reportItem => FeedCard(
-                item: reportItem,
-                canThank: currentUserId != null && reportItem.userId != currentUserId,
-                onThankPressed: () => provider.toggleThank(reportItem.id),
-              ),
-            EventFeedItem eventItem => EventFeedCard(
-                item: eventItem,
-                canJoin: provider.canJoin(eventItem),
-                onJoinPressed: () => provider.toggleJoinEvent(eventItem.id),
-              ),
-          };
+          if (item is ReportFeedItem) {
+            return FeedCard(
+              item: item,
+              canThank: currentUserId != null && item.userId != currentUserId,
+              onThankPressed: () => provider.toggleThank(item.id),
+            );
+          } else if (item is EventFeedItem) {
+            return EventFeedCard(
+              item: item,
+              canJoin: provider.canJoin(item),
+              onJoinPressed: () => provider.toggleJoinEvent(item.id),
+              onTap: () => _showEventDetails(context, item),
+            );
+          }
+          
+          // Fallback (should never reach here)
+          return const SizedBox.shrink();
         },
       ),
     );

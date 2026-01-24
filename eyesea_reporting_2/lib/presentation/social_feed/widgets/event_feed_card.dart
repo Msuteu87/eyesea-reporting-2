@@ -7,12 +7,14 @@ import '../../../domain/entities/unified_feed_item.dart';
 class EventFeedCard extends StatelessWidget {
   final EventFeedItem item;
   final VoidCallback? onJoinPressed;
+  final VoidCallback? onTap;
   final bool canJoin;
 
   const EventFeedCard({
     super.key,
     required this.item,
     this.onJoinPressed,
+    this.onTap,
     this.canJoin = true,
   });
 
@@ -20,24 +22,26 @@ class EventFeedCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      decoration: BoxDecoration(
-        color: isDark ? AppColors.darkSurface : AppColors.pureWhite,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: AppColors.lightSeaGreen.withValues(alpha: 0.3),
-          width: 1.5,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        decoration: BoxDecoration(
+          color: isDark ? AppColors.darkSurface : AppColors.pureWhite,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: AppColors.lightSeaGreen.withValues(alpha: 0.3),
+            width: 1.5,
           ),
-        ],
-      ),
-      child: Column(
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Cover image (if available)
@@ -58,6 +62,7 @@ class EventFeedCard extends StatelessWidget {
 
           const SizedBox(height: 12),
         ],
+      ),
       ),
     );
   }

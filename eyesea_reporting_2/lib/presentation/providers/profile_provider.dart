@@ -5,18 +5,11 @@ import '../../domain/repositories/badge_repository.dart';
 import '../../domain/repositories/report_repository.dart';
 import '../../core/utils/logger.dart';
 
-// TODO: [SCALABILITY] Unbounded list growth in _userReports
-// Current: _userReports = [..._userReports, ...newReports] grows indefinitely
-// At 5000 users: Power users with 100s of reports will accumulate excessive memory
-// Fix: Cap list size (e.g., 50 items max) or implement windowed pagination
-// that drops older items when new ones are loaded.
-
-// TODO: [SCALABILITY] Replace offset pagination with cursor-based pagination
-// Current: Uses _reportsOffset which gets slower as offset increases
-// Fix: Use cursor (last report's createdAt or ID) for keyset pagination
-// This is O(1) vs O(n) for offset-based queries
-
 /// Provider for profile page data including badges, stats, and user reports.
+///
+/// Uses offset-based pagination. For cursor-based pagination (better for large
+/// datasets), the repository would need to support cursor parameters using
+/// the last report's createdAt or ID for O(1) keyset queries.
 class ProfileProvider extends ChangeNotifier {
   final BadgeRepository _badgeRepository;
   final ReportRepository _reportRepository;
@@ -55,6 +48,9 @@ class ProfileProvider extends ChangeNotifier {
 
   int _reportsOffset = 0;
   static const int _reportsLimit = 20;
+
+  /// Maximum reports to keep in memory to prevent unbounded growth.
+  static const int _maxReportsInMemory = 100;
 
   String? _currentUserId;
 
@@ -132,6 +128,13 @@ class ProfileProvider extends ChangeNotifier {
         _userReports = newReports;
       } else {
         _userReports = [..._userReports, ...newReports];
+      }
+
+      // Enforce memory cap: keep only the most recent reports
+      if (_userReports.length > _maxReportsInMemory) {
+        final overflow = _userReports.length - _maxReportsInMemory;
+        _userReports = _userReports.sublist(overflow);
+        AppLogger.debug('Memory cap enforced: removed $overflow oldest reports');
       }
 
       _hasMoreReports = newReports.length >= _reportsLimit;

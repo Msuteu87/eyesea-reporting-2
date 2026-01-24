@@ -141,15 +141,77 @@ class _CameraCaptureScreenState extends State<CameraCaptureScreen>
   }
 
   Future<void> _selectFromGallery(AssetEntity asset) async {
-    final file = await asset.file;
-    if (file == null) return;
+    try {
+      final file = await asset.file;
+      if (file == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Row(
+                children: [
+                  Icon(LucideIcons.imageOff, color: Colors.white, size: 20),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Text('Could not load image. Please try another photo.'),
+                  ),
+                ],
+              ),
+              backgroundColor: Colors.orange.shade700,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+        return;
+      }
 
-    setState(() {
-      _capturedImage = file;
-      _showThumbnailAnimation = true;
-    });
+      // Verify the file actually exists on disk
+      if (!file.existsSync()) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Row(
+                children: [
+                  Icon(LucideIcons.alertTriangle, color: Colors.white, size: 20),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Text('Image file not found. It may have been deleted.'),
+                  ),
+                ],
+              ),
+              backgroundColor: Colors.orange.shade700,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+        return;
+      }
 
-    await _compressAndNavigate(file);
+      setState(() {
+        _capturedImage = file;
+        _showThumbnailAnimation = true;
+      });
+
+      await _compressAndNavigate(file);
+    } catch (e) {
+      AppLogger.error('Gallery selection error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(LucideIcons.alertCircle, color: Colors.white, size: 20),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text('Failed to load image: ${e.toString().length > 30 ? '${e.toString().substring(0, 30)}...' : e}'),
+                ),
+              ],
+            ),
+            backgroundColor: AppColors.punchRed,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _compressAndNavigate(File originalFile) async {

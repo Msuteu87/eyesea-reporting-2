@@ -2,17 +2,22 @@ import 'package:flutter/material.dart';
 import '../../domain/entities/event.dart';
 import '../../domain/repositories/event_repository.dart';
 
-// TODO: [SCALABILITY] Add pagination for past events
-// Current: fetchPastEvents() loads all past events at once
-// At scale: Years of events = unbounded memory growth
-// Fix: Add limit/offset or cursor-based pagination for past events
-// Upcoming events typically bounded naturally by time
-
 /// Provider for managing events state and operations.
+///
+/// ## Pagination
+///
+/// Past events are capped at [_maxPastEventsInMemory] to prevent unbounded
+/// memory growth. For true pagination with lazy loading, the repository
+/// would need to support limit/offset parameters.
+///
+/// Upcoming events are naturally bounded by time and don't require pagination.
 class EventsProvider with ChangeNotifier {
   final EventRepository _repository;
 
   EventsProvider(this._repository);
+
+  /// Maximum past events to keep in memory to prevent unbounded growth.
+  static const int _maxPastEventsInMemory = 50;
 
   // State
   List<EventEntity> _upcomingEvents = [];
@@ -44,14 +49,20 @@ class EventsProvider with ChangeNotifier {
     }
   }
 
-  /// Fetches past events.
+  /// Fetches past events with memory cap applied.
   Future<void> fetchPastEvents() async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
-      _pastEvents = await _repository.fetchEvents(filter: 'past');
+      final events = await _repository.fetchEvents(filter: 'past');
+      // Apply memory cap: keep only the most recent past events
+      if (events.length > _maxPastEventsInMemory) {
+        _pastEvents = events.take(_maxPastEventsInMemory).toList();
+      } else {
+        _pastEvents = events;
+      }
       _error = null;
     } catch (e) {
       _error = e.toString();

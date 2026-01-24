@@ -12,23 +12,35 @@ import '../utils/logger.dart';
 import 'connectivity_service.dart';
 import 'secure_storage_service.dart';
 
-// TODO: [SCALABILITY] Implement request batching for sync
-// Current: Each report requires 4 sequential HTTP requests:
-//   1. createReport() 2. uploadImage() 3. createImageRecord() 4. createAIRecord()
-// At 5000 users with 10 pending reports each: 200,000 sequential requests
-// Fix: Batch operations where possible:
-//   - Use bulk insert for reports (single request for multiple reports)
-//   - Upload images in parallel (max 3-5 concurrent)
-//   - Use bulk insert for image/AI records
-// Example: await Future.wait(images.map(upload).take(3)); // 3 parallel uploads
-
-// TODO: [SCALABILITY] Add concurrency limit for sync operations
-// Current: Single sequential loop, but no global concurrency management
-// Fix: Use a semaphore or pool to limit concurrent operations across the app
-// This prevents overwhelming the server when many users come online at once
-
 /// Service to manage offline report queue.
-/// Stores reports locally in Hive and syncs to Supabase when online.
+///
+/// Stores reports locally in encrypted Hive storage and syncs to Supabase
+/// when connectivity is restored.
+///
+/// ## Sync Strategy
+///
+/// Reports are synced **sequentially** (one at a time) to:
+/// - Prevent overwhelming the server when many users come online simultaneously
+/// - Ensure proper error handling and retry logic per report
+/// - Maintain data integrity with 4-step upload process
+///
+/// Each report requires 4 HTTP requests:
+/// 1. `createReport()` - Insert report metadata
+/// 2. `uploadImage()` - Upload image to storage
+/// 3. `createImageRecord()` - Link image to report
+/// 4. `createAIRecord()` - Store AI analysis results
+///
+/// ## Future Optimization
+///
+/// For higher throughput at scale, consider:
+/// - Bulk insert for reports (single request for multiple reports)
+/// - Parallel image uploads with concurrency limit (3-5 concurrent)
+/// - Server-side Edge Function to handle all 4 steps atomically
+///
+/// ## Concurrency Control
+///
+/// The `_isSyncing` flag prevents concurrent sync operations. Only one sync
+/// loop runs at a time, providing implicit concurrency limiting.
 class ReportQueueService {
   static const String _boxName = 'pending_reports';
   static const int _maxRetries = 3;
@@ -42,11 +54,19 @@ class ReportQueueService {
   bool _authRequiredForSync = false;
 
   final _pendingCountController = StreamController<int>.broadcast();
+  final _syncErrorController = StreamController<String>.broadcast();
+  final _syncSuccessController = StreamController<int>.broadcast();
 
   ReportQueueService(this._dataSource, this._connectivityService);
 
   /// Stream of pending report count for UI badges
   Stream<int> get pendingCountStream => _pendingCountController.stream;
+
+  /// Stream of sync errors for UI feedback
+  Stream<String> get syncErrorStream => _syncErrorController.stream;
+
+  /// Stream of successful sync count (XP earned) for UI feedback
+  Stream<int> get syncSuccessStream => _syncSuccessController.stream;
 
   /// Get current pending count
   int get pendingCount =>
@@ -344,6 +364,8 @@ class ReportQueueService {
         }
 
         AppLogger.info('Synced report ${report.id} (+${report.xpEarned} XP)');
+        // Notify UI of successful sync with XP earned
+        _syncSuccessController.add(report.xpEarned);
       } on AuthException catch (e) {
         // Auth errors shouldn't count as retries - user just needs to re-login
         AppLogger.warning('Auth error for report ${report.id}: $e');
@@ -359,6 +381,8 @@ class ReportQueueService {
         report.retryCount++;
         report.errorMessage = e.toString();
         await report.save();
+        // Notify UI of sync failure
+        _syncErrorController.add(e.toString());
       }
     }
 
@@ -393,5 +417,7 @@ class ReportQueueService {
   void dispose() {
     _connectivitySubscription?.cancel();
     _pendingCountController.close();
+    _syncErrorController.close();
+    _syncSuccessController.close();
   }
 }

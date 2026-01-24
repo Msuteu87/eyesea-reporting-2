@@ -1,5 +1,3 @@
-// TODO: [MAINTAINABILITY] This file is 641 lines - consider splitting.
-// Extract: AIAnalysisCard, LocationPicker, PollutionTypeSelector, SeveritySlider
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -462,13 +460,68 @@ class _ReportDetailsScreenState extends State<ReportDetailsScreen> {
     }
   }
 
+  /// Validates that coordinates are reasonable (not at 0,0 null island)
+  bool _isValidLocation(double lat, double lng) {
+    // Check for null island (0,0) - common GPS failure default
+    if (lat.abs() < 0.01 && lng.abs() < 0.01) {
+      return false;
+    }
+    // Check for valid coordinate ranges
+    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+      return false;
+    }
+    return true;
+  }
+
   Future<void> _submitReport() async {
     if (_currentLocation == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Waiting for location... please wait.')),
+        SnackBar(
+          content: const Row(
+            children: [
+              Icon(LucideIcons.mapPinOff, color: Colors.white, size: 20),
+              SizedBox(width: 12),
+              Expanded(child: Text('Location required. Please set your location.')),
+            ],
+          ),
+          backgroundColor: Colors.orange.shade700,
+          behavior: SnackBarBehavior.floating,
+          action: SnackBarAction(
+            label: 'Set Location',
+            textColor: Colors.white,
+            onPressed: _showManualLocationPicker,
+          ),
+        ),
       );
-      await _detectLocation();
-      if (!mounted || _currentLocation == null) return;
+      return;
+    }
+
+    // Validate coordinates are not at null island (0,0) or invalid
+    final lat = _currentLocation!.coordinates.lat.toDouble();
+    final lng = _currentLocation!.coordinates.lng.toDouble();
+    if (!_isValidLocation(lat, lng)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Row(
+            children: [
+              Icon(LucideIcons.alertTriangle, color: Colors.white, size: 20),
+              SizedBox(width: 12),
+              Expanded(
+                child: Text('Invalid location detected. Please set your location manually.'),
+              ),
+            ],
+          ),
+          backgroundColor: Colors.orange.shade700,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 5),
+          action: SnackBarAction(
+            label: 'Set Location',
+            textColor: Colors.white,
+            onPressed: _showManualLocationPicker,
+          ),
+        ),
+      );
+      return;
     }
 
     setState(() => _isSubmitting = true);

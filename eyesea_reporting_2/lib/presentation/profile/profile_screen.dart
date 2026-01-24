@@ -1,18 +1,3 @@
-// TODO: [MAINTAINABILITY] This file is 890 lines - consider splitting.
-// Candidates for extraction:
-// - SettingsTab → settings_tab.dart (already exists but could be separate screen)
-// - MyReportsTab → my_reports_tab.dart
-// - LegalTab → legal_tab.dart
-// - ProfileHeader → profile_header.dart
-
-// TODO: [ARCHITECTURE] Extract role change logic to ProfileEditProvider
-// Current: _handleRoleChange() is 100+ lines handling UI, API, and state
-// Fix: Move business logic to dedicated provider/use case, keep only UI here
-
-// TODO: [MEMORY] ImagePicker instance lifecycle
-// Current: ImagePicker() created inline when needed
-// Consider: Single instance per screen or lazy singleton to avoid overhead
-
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';

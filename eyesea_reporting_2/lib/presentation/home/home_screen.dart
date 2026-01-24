@@ -6,15 +6,8 @@ import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' hide ImageSource;
 import 'package:geolocator/geolocator.dart' as geo;
 import 'package:provider/provider.dart';
 
-// TODO: [LIFECYCLE] Handle location permission changes while backgrounded
-// Current: If user disables location in settings while app is backgrounded,
-// _getCurrentLocation won't refresh and may provide stale coordinates
-// Fix: Check permission status in didChangeAppLifecycleState resumed state
-
-// TODO: [MEMORY] Verify MapboxMap cleanup in dispose
-// Current: _mapboxMap reference may hold native resources
-// Fix: Ensure all map listeners are removed and consider nullifying reference
-
+import '../../core/services/report_queue_service.dart';
+import '../../core/theme/app_colors.dart';
 import '../../core/utils/logger.dart';
 import '../providers/auth_provider.dart';
 import '../providers/reports_map_provider.dart';
@@ -68,6 +61,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   // Track if filter chips are expanded (for positioning search button)
   bool _filtersExpanded = false;
 
+  // Sync feedback subscriptions
+  StreamSubscription<String>? _syncErrorSubscription;
+  StreamSubscription<int>? _syncSuccessSubscription;
+
   // Mapbox style: dynamic based on theme
   String get _mapStyle {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -88,17 +85,93 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       // Set current user ID for "My Reports" filtering
       final authProvider = context.read<AuthProvider>();
       _reportsProvider!.setCurrentUserId(authProvider.currentUser?.id);
+
+      // Listen for sync feedback to show user notifications
+      final queueService = context.read<ReportQueueService>();
+      _syncErrorSubscription = queueService.syncErrorStream.listen(_onSyncError);
+      _syncSuccessSubscription = queueService.syncSuccessStream.listen(_onSyncSuccess);
     });
+  }
+
+  void _onSyncError(String error) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(LucideIcons.alertCircle, color: Colors.white, size: 20),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Sync failed: ${error.length > 50 ? '${error.substring(0, 50)}...' : error}',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: AppColors.punchRed,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 4),
+      ),
+    );
+  }
+
+  void _onSyncSuccess(int xpEarned) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(LucideIcons.check, color: Colors.white, size: 20),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text('Report synced! +$xpEarned XP'),
+            ),
+          ],
+        ),
+        backgroundColor: AppColors.successGreen,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 3),
+      ),
+    );
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      AppLogger.info('HomeScreen: App resumed, checking location...');
-      // Re-get location if we don't have it (e.g., after returning from Settings)
-      if (_currentPosition == null) {
+      AppLogger.info('HomeScreen: App resumed, checking location permission...');
+      // Always check permission status when resumed - user may have changed
+      // location settings while app was backgrounded
+      _checkLocationPermissionAndRefresh();
+    }
+  }
+
+  /// Check location permission status and refresh location if granted.
+  /// Handles the case where user enables/disables location in system settings.
+  Future<void> _checkLocationPermissionAndRefresh() async {
+    try {
+      final permission = await geo.Geolocator.checkPermission();
+
+      if (permission == geo.LocationPermission.denied ||
+          permission == geo.LocationPermission.deniedForever) {
+        // Permission was revoked - clear stale position
+        if (_currentPosition != null) {
+          AppLogger.info('Location permission revoked, clearing position');
+          if (mounted) {
+            setState(() {
+              _currentPosition = null;
+            });
+          }
+        }
+      } else {
+        // Permission granted - refresh location to get current coordinates
+        // This handles both: returning from Settings after granting permission,
+        // and ensuring we have fresh coordinates after long background periods
         _getCurrentLocation();
       }
+    } catch (e) {
+      AppLogger.warning('Error checking location permission: $e');
     }
   }
 
@@ -159,6 +232,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _markerUpdateDebounce?.cancel();
     _viewportDebounce?.cancel();
     _selectedMarkerNotifier.dispose();
+
+    // Cancel sync feedback subscriptions
+    _syncErrorSubscription?.cancel();
+    _syncSuccessSubscription?.cancel();
+
+    // Clean up MapboxMap resources to prevent memory leaks
+    // Remove tap listener before nullifying reference
+    _mapboxMap?.setOnMapTapListener(null);
+    _mapboxMap = null;
+    _markerRenderer = null;
+    _heatmapRenderer = null;
+    _tapHandler = null;
+
     super.dispose();
   }
 

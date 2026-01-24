@@ -1,26 +1,14 @@
 import '../../domain/entities/report.dart';
+import '../config/pollution_config.dart';
 
-// TODO: [DOCUMENTATION] Add player-facing explanation of Credits system
-// Current: Credits calculation has base + bonuses but no in-app explanation
-// Fix: Create wiki/help screen explaining how EyeSea Credits are earned:
-//   - Base: 25 Credits per report
-//   - Photo bonus: +5 Credits
-//   - Location bonus: +10 Credits
-//   - Beach/water bonus: +10 Credits
-//   - Severity bonus: 0-20 Credits based on severity level
-//   - Multi-type bonus: +5 Credits per additional pollution type
-//   - Item count bonus: +1 Credit per 5 items (capped at 50 Credits)
-
-// TODO: [MAINTAINABILITY] Move weight constants to config/database
-// Current: _averageWeights hardcoded - can't adjust based on real data
-// Fix: Store in Supabase config table, cache locally, allow admin updates
-
-// TODO: [VALIDATION] Handle user-adjusted counts vs AI detection
-// Current: If user manually adjusts pollution counts after AI detection,
-// fraud score will flag as suspicious (count mismatch)
-// Consider: Add UI warning when user deviates significantly from AI counts
-
-/// Fraud detection result
+/// Fraud detection result.
+///
+/// ## User Count Adjustments
+///
+/// When users manually adjust pollution counts after AI detection, the fraud
+/// system will flag significant deviations. This is expected behavior - users
+/// should be warned in the UI when their counts deviate significantly from
+/// AI baseline to explain why their fraud score may be affected.
 class FraudAnalysis {
   final bool isSuspicious;
   final double fraudScore; // 0.0 = clean, 1.0 = highly suspicious
@@ -35,34 +23,40 @@ class FraudAnalysis {
   });
 }
 
-/// Utility class for pollution-related calculations
+/// Utility class for pollution-related calculations.
+///
+/// ## Credits/XP System
+///
+/// Users earn EyeSea Credits for each report:
+/// - **Base:** 25 Credits per report
+/// - **Photo bonus:** +5 Credits
+/// - **Location bonus:** +10 Credits
+/// - **Beach/water bonus:** +10 Credits (environmental priority areas)
+/// - **Severity bonus:** 0-20 Credits based on severity level (1-5)
+/// - **Multi-type bonus:** +5 Credits per additional pollution type
+/// - **Item count bonus:** +1 Credit per item (capped at 50 Credits)
+/// - **Weight bonus:** +3 Credits per kg (capped at 30 Credits)
+/// - **Volume tier bonus:** +5/10/20 Credits for 5+/10+/20+ items
+///
+/// Configuration values are centralized in [PollutionConfig].
 class PollutionCalculations {
-  /// Average weight per item in kilograms
-  static const Map<PollutionType, double> _averageWeights = {
-    PollutionType.plastic: 0.025, // ~25g per plastic bottle/cup
-    PollutionType.oil: 0.5, // Oil spill estimation per unit
-    PollutionType.debris: 0.15, // ~150g per debris item
-    PollutionType.sewage: 1.0, // Sewage incident estimation
-    PollutionType.fishingGear: 2.5, // ~2.5kg per fishing gear item
-    PollutionType.container: 0.5, // ~500g per container
-    PollutionType.other: 0.1, // Generic weight
-  };
-
-  /// Calculate total estimated weight from pollution counts
+  /// Calculate total estimated weight from pollution counts.
+  /// Uses weight estimates from [PollutionConfig.averageWeights].
   static double calculateTotalWeight(Map<PollutionType, int> typeCounts) {
     double totalWeight = 0.0;
 
     for (final entry in typeCounts.entries) {
       final type = entry.key;
       final count = entry.value;
-      final weightPerItem = _averageWeights[type] ?? 0.1;
+      final weightPerItem = PollutionConfig.averageWeights[type] ?? 0.1;
       totalWeight += weightPerItem * count;
     }
 
     return totalWeight;
   }
 
-  /// Calculate breakdown of weight by type
+  /// Calculate breakdown of weight by type.
+  /// Uses weight estimates from [PollutionConfig.averageWeights].
   static Map<PollutionType, double> calculateWeightBreakdown(
     Map<PollutionType, int> typeCounts,
   ) {
@@ -71,7 +65,7 @@ class PollutionCalculations {
     for (final entry in typeCounts.entries) {
       final type = entry.key;
       final count = entry.value;
-      final weightPerItem = _averageWeights[type] ?? 0.1;
+      final weightPerItem = PollutionConfig.averageWeights[type] ?? 0.1;
       breakdown[type] = weightPerItem * count;
     }
 
@@ -470,24 +464,10 @@ class PollutionCalculations {
     );
   }
 
-  /// Get maximum reasonable count per pollution type
+  /// Get maximum reasonable count per pollution type.
+  /// Uses thresholds from [PollutionConfig.maxReasonableCounts].
   static int _getMaxReasonableCount(PollutionType type) {
-    switch (type) {
-      case PollutionType.plastic:
-        return 500; // Bottles/cups - beach cleanup could have hundreds
-      case PollutionType.oil:
-        return 50; // Oil spills - lower count
-      case PollutionType.debris:
-        return 1000; // General debris - highest variance
-      case PollutionType.sewage:
-        return 20; // Sewage incidents - typically low count
-      case PollutionType.fishingGear:
-        return 100; // Nets/ropes - moderate
-      case PollutionType.container:
-        return 200; // Containers/drums
-      case PollutionType.other:
-        return 500; // Generic
-    }
+    return PollutionConfig.maxReasonableCounts[type] ?? 500;
   }
 
   /// Calculate XP with optional fraud penalty

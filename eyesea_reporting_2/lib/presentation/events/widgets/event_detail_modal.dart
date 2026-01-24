@@ -119,8 +119,53 @@ class _EventDetailModalState extends State<EventDetailModal> {
               Expanded(
                 child: ListView(
                   controller: scrollController,
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  padding: EdgeInsets.zero,
                   children: [
+                    // Cover image (if available)
+                    if (widget.event.coverImageUrl != null &&
+                        widget.event.coverImageUrl!.isNotEmpty)
+                      AspectRatio(
+                        aspectRatio: 16 / 9,
+                        child: Image.network(
+                          widget.event.coverImageUrl!,
+                          fit: BoxFit.cover,
+                          loadingBuilder: (context, child, loadingProgress) {
+                            if (loadingProgress == null) return child;
+                            return Container(
+                              color: isDark ? Colors.grey[850] : Colors.grey[200],
+                              child: Center(
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: AppColors.oceanBlue,
+                                  value: loadingProgress.expectedTotalBytes != null
+                                      ? loadingProgress.cumulativeBytesLoaded /
+                                          loadingProgress.expectedTotalBytes!
+                                      : null,
+                                ),
+                              ),
+                            );
+                          },
+                          errorBuilder: (context, error, stackTrace) => Container(
+                            color: isDark ? Colors.grey[850] : Colors.grey[200],
+                            child: Center(
+                              child: Icon(
+                                LucideIcons.imageOff,
+                                size: 48,
+                                color: isDark ? Colors.grey[600] : Colors.grey[400],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+
+                    // Content with padding
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                    const SizedBox(height: 16),
+
                     // Event title
                     Text(
                       widget.event.title,
@@ -288,6 +333,9 @@ class _EventDetailModalState extends State<EventDetailModal> {
                           )),
 
                     const SizedBox(height: 100), // Space for button
+                        ],
+                      ),
+                    ), // Padding
                   ],
                 ),
               ),

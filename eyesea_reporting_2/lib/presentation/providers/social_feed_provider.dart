@@ -9,19 +9,10 @@ import '../../domain/repositories/social_feed_repository.dart';
 /// Filter options for the social feed
 enum FeedFilter { nearby, country, city, world }
 
-// TODO: [SCALABILITY] Unbounded list growth issue
-// Current implementation: _items = [..._items, ...newItems] grows indefinitely
-// At 5000 users: Heavy scrollers accumulate GBs of data → OOM crash
-// Fix: Implement memory cap (e.g., keep last 100 items) or use cursor-based
-// pagination with windowed list that discards items outside the viewport.
-// See: https://api.flutter.dev/flutter/widgets/ListView/ListView.builder.html
-
-// TODO: [SCALABILITY] Replace offset pagination with cursor-based pagination
-// Current: Uses _currentOffset which is slow on large datasets (DB must skip N rows)
-// Fix: Use cursor (e.g., last item's ID or timestamp) for efficient keyset pagination
-// Example: fetchFeed(cursor: lastItem.id, limit: 20) instead of offset
-
-/// Provider for managing social feed state with automatic proximity-first filtering
+/// Provider for managing social feed state with automatic proximity-first filtering.
+///
+/// Uses offset-based pagination. For cursor-based pagination (better for large
+/// datasets), the repository would need to support cursor parameters.
 class SocialFeedProvider extends ChangeNotifier {
   final SocialFeedRepository _repository;
   final ConnectivityService _connectivityService;
@@ -48,6 +39,10 @@ class SocialFeedProvider extends ChangeNotifier {
 
   static const int _pageSize = 20;
   int _currentOffset = 0;
+
+  /// Maximum items to keep in memory to prevent unbounded growth.
+  /// When exceeded, older items are discarded.
+  static const int _maxItemsInMemory = 200;
 
   SocialFeedProvider(this._repository, this._connectivityService) {
     _connectivitySubscription =
@@ -226,6 +221,13 @@ class SocialFeedProvider extends ChangeNotifier {
         _items = newItems;
       } else {
         _items = [..._items, ...newItems];
+      }
+
+      // Enforce memory cap: keep only the most recent items
+      if (_items.length > _maxItemsInMemory) {
+        final overflow = _items.length - _maxItemsInMemory;
+        _items = _items.sublist(overflow);
+        log('Memory cap enforced: removed $overflow oldest items');
       }
 
       _hasMore = newItems.length >= _pageSize;

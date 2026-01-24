@@ -50,12 +50,20 @@ class _MapPickerBottomSheetState extends State<MapPickerBottomSheet> {
   MapboxMap? _mapController;
   late double _selectedLat;
   late double _selectedLng;
+  bool _showNullIslandWarning = false;
+
+  /// Check if coordinates are near null island (0,0)
+  bool _isNearNullIsland(double lat, double lng) {
+    return lat.abs() < 0.01 && lng.abs() < 0.01;
+  }
 
   @override
   void initState() {
     super.initState();
     _selectedLat = widget.initialLatitude;
     _selectedLng = widget.initialLongitude;
+    // Show warning if starting from null island
+    _showNullIslandWarning = _isNearNullIsland(_selectedLat, _selectedLng);
   }
 
   @override
@@ -118,6 +126,29 @@ class _MapPickerBottomSheetState extends State<MapPickerBottomSheet> {
               ],
             ),
           ),
+
+          // Warning banner when starting from null island
+          if (_showNullIslandWarning)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              color: Colors.orange.shade700,
+              child: Row(
+                children: [
+                  const Icon(LucideIcons.alertTriangle,
+                      color: Colors.white, size: 18),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'GPS unavailable. Navigate to your location on the map.',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
 
           // Map
           Expanded(
@@ -245,32 +276,53 @@ class _MapPickerBottomSheetState extends State<MapPickerBottomSheet> {
     setState(() {
       _selectedLat = center.coordinates.lat.toDouble();
       _selectedLng = center.coordinates.lng.toDouble();
+      // Hide warning once user moves away from null island
+      if (_showNullIslandWarning && !_isNearNullIsland(_selectedLat, _selectedLng)) {
+        _showNullIslandWarning = false;
+      }
     });
   }
 
   /// Confirms the location by fetching the current camera position.
   /// This ensures we return the actual center position, not potentially stale state.
   Future<void> _confirmLocation() async {
-    if (_mapController == null) {
-      // Fallback to state values if controller not available
-      Navigator.pop(
-        context,
-        Point(coordinates: Position(_selectedLng, _selectedLat)),
-      );
-      return;
+    double finalLat = _selectedLat;
+    double finalLng = _selectedLng;
+
+    if (_mapController != null) {
+      // Get the current camera position to ensure accuracy
+      final cameraState = await _mapController!.getCameraState();
+      final center = cameraState.center;
+      finalLat = center.coordinates.lat.toDouble();
+      finalLng = center.coordinates.lng.toDouble();
     }
 
-    // Get the current camera position to ensure accuracy
-    final cameraState = await _mapController!.getCameraState();
-    final center = cameraState.center;
+    // Validate location is not near null island
+    if (_isNearNullIsland(finalLat, finalLng)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Row(
+              children: [
+                Icon(LucideIcons.alertTriangle, color: Colors.white, size: 18),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text('Please navigate to your actual location before confirming.'),
+                ),
+              ],
+            ),
+            backgroundColor: Colors.orange.shade700,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      return;
+    }
 
     if (mounted) {
       Navigator.pop(
         context,
-        Point(coordinates: Position(
-          center.coordinates.lng.toDouble(),
-          center.coordinates.lat.toDouble(),
-        )),
+        Point(coordinates: Position(finalLng, finalLat)),
       );
     }
   }

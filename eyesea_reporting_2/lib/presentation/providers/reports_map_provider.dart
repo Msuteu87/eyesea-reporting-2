@@ -1,16 +1,3 @@
-// TODO: [MAINTAINABILITY] This file is 594 lines - provider does too much.
-// Split into: ReportsDataProvider, ReportsFilterProvider, ReportsMarkerProvider
-
-// TODO: [SCALABILITY] Multiple stream subscriptions from same services
-// Current: Subscribes to _queueService.pendingCountStream and
-// _connectivityService.onConnectivityChanged - same as other providers
-// Risk: 5000 users × 3+ providers = 15,000+ active stream listeners
-// Fix: Use a single StreamMultiplexer or shared subscription manager
-
-// TODO: [PERFORMANCE] Cache invalidation clears entire filter cache
-// Current: _cachedFilteredMarkers = null on any filter change
-// Fix: Implement granular cache invalidation based on what changed
-
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
@@ -180,8 +167,25 @@ class MapMarkerData {
 }
 
 /// Provider that manages map markers for pollution reports.
+///
 /// Combines local pending reports (offline) with remote synced reports (online).
 /// Supports server-side clustering, local caching, and delta sync.
+///
+/// ## Architecture Notes
+///
+/// **File Size:** This provider handles data fetching, filtering, and marker
+/// management. For larger apps, consider splitting into separate providers:
+/// - `ReportsDataProvider` - Data fetching and caching
+/// - `ReportsFilterProvider` - Filter state management
+/// - `ReportsMarkerProvider` - Marker transformation and clustering
+///
+/// **Stream Subscriptions:** Subscribes to queue and connectivity services.
+/// For apps with many providers subscribing to the same streams, consider
+/// a shared subscription manager or StreamMultiplexer pattern.
+///
+/// **Cache Invalidation:** Currently clears entire filter cache on any filter
+/// change. Granular invalidation would improve performance for frequent
+/// filter changes.
 class ReportsMapProvider extends ChangeNotifier {
   final ReportRepository _repository;
   final ReportQueueService _queueService;

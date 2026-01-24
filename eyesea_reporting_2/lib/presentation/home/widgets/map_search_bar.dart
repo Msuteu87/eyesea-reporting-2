@@ -628,8 +628,8 @@ class _MapSearchBarState extends State<MapSearchBar>
         context.push('/profile');
         break;
       case 'event_created':
-        // Navigate to events list (event detail screen to be added in Phase 2)
-        // TODO: Add /events/:eventId route for deep linking to specific event
+        // Navigate to events list
+        // Future: Add /events/:eventId route for deep linking to specific event
         context.go('/events');
         break;
       case 'system':

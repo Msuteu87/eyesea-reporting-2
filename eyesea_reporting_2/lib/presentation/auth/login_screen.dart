@@ -10,11 +10,14 @@ import '../../core/theme/app_colors.dart';
 import '../../core/utils/validators.dart';
 import '../providers/auth_provider.dart';
 
-// TODO: [FEATURE] SSO Authentication - Pending Implementation
-// - Google Sign In: Configure OAuth in Supabase dashboard, add google_sign_in package
-// - Apple Sign In: Configure OAuth in Supabase, add sign_in_with_apple package
-// - LinkedIn Sign In: Configure OAuth in Supabase dashboard
-
+/// Login screen with email/password authentication.
+///
+/// ## SSO Authentication (Future)
+///
+/// Social sign-in can be enabled by:
+/// 1. Configuring OAuth providers in Supabase dashboard
+/// 2. Adding platform packages (google_sign_in, sign_in_with_apple)
+/// 3. Calling `authProvider.signInWithOAuth(OAuthProvider.xxx)`
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 

@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show AuthState, SupabaseClient, PostgresChangeEvent, PostgresChangeFilter, PostgresChangeFilterType, RealtimeChannel;
 
 import '../utils/logger.dart';
 
@@ -75,6 +75,7 @@ class NotificationService {
 
   final SupabaseClient _supabase;
   RealtimeChannel? _channel;
+  StreamSubscription<AuthState>? _authSubscription;
 
   final FlutterLocalNotificationsPlugin _localNotifications =
       FlutterLocalNotificationsPlugin();
@@ -113,6 +114,26 @@ class NotificationService {
   Future<void> initialize() async {
     // Initialize local notifications first
     await _initializeLocalNotifications();
+
+    // Subscribe to auth state changes to reinitialize when user logs in/out
+    _authSubscription?.cancel();
+    _authSubscription = _supabase.auth.onAuthStateChange.listen((data) async {
+      final userId = data.session?.user.id;
+      if (userId != null) {
+        // User logged in - load notifications and subscribe to realtime
+        AppLogger.info('NotificationService: User logged in, initializing');
+        await _loadNotifications();
+        _subscribeToRealtime(userId);
+      } else {
+        // User logged out - clear notifications and unsubscribe
+        AppLogger.info('NotificationService: User logged out, clearing');
+        _channel?.unsubscribe();
+        _channel = null;
+        _notifications = [];
+        _unreadCount = 0;
+        _notificationsController.add(_notifications);
+      }
+    });
 
     final userId = _supabase.auth.currentUser?.id;
     if (userId == null) {
@@ -393,6 +414,7 @@ class NotificationService {
 
   /// Dispose resources
   void dispose() {
+    _authSubscription?.cancel();
     _channel?.unsubscribe();
     _notificationsController.close();
     _newNotificationController.close();

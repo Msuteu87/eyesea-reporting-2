@@ -8,13 +8,18 @@ import '../../domain/entities/badge.dart';
 import '../../domain/entities/category_rank.dart';
 import '../../domain/entities/leaderboard_entry.dart';
 
-// TODO: [SCALABILITY] Consider virtual scrolling for large leaderboards
-// Current: Loads all entries into _entries list at once
-// At scale: 1000+ entries = memory pressure and slow ListView rendering
-// Fix: Implement SliverVirtualizedList or lazy loading with pagination
-// Typically only top 50-100 entries needed for meaningful display
-
 /// Provider for managing leaderboard state across Rankings and Awards tabs.
+///
+/// ## Scalability Note
+///
+/// Currently loads all leaderboard entries into memory. For leaderboards with
+/// 1000+ entries, consider:
+/// - Server-side pagination (limit to top 100)
+/// - Virtual scrolling with `SliverList.builder`
+/// - Lazy loading as user scrolls
+///
+/// In practice, leaderboards typically only display top 50-100 entries for
+/// meaningful competition, so server-side limiting is the recommended approach.
 class LeaderboardProvider extends ChangeNotifier {
   final LeaderboardDataSource _leaderboardDataSource;
   final BadgeDataSource _badgeDataSource;

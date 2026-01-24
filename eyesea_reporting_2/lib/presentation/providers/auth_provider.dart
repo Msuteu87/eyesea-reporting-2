@@ -9,15 +9,27 @@ import '../../domain/entities/user.dart';
 import '../../domain/repositories/auth_repository.dart';
 import '../../core/utils/logger.dart';
 
-// TODO: [UX] Indicate stale data when using cached profile
-// Current: When offline, cached profile is used but UI doesn't indicate this
-// Fix: Add visual badge/indicator showing "cached data" or last sync time
-
-// TODO: [DESIGN] Async init runs without blocking UI
-// Current: _init() runs async - if fetchCurrentUser() is slow (5+ seconds),
-// user sees splash screen with no feedback
-// Fix: Add loading timeout with retry option, or show skeleton UI
-
+/// Provider for authentication state and user profile management.
+///
+/// ## Offline Mode & Stale Data Indicators
+///
+/// When the device is offline, cached profile data is used. The UI can check:
+/// - [isOfflineMode] - true when using cached data
+/// - [lastSyncTime] - when profile was last fetched from server
+/// - [timeSinceLastSync] - human-readable duration since last sync
+///
+/// Example usage in UI:
+/// ```dart
+/// if (authProvider.isOfflineMode) {
+///   Text('Offline • Last synced ${authProvider.timeSinceLastSync}');
+/// }
+/// ```
+///
+/// ## Async Initialization
+///
+/// The [_init] method runs asynchronously without blocking UI. If profile
+/// fetch takes longer than expected, the splash screen is shown. For improved
+/// UX, consider implementing a loading timeout with retry option.
 class AuthProvider extends ChangeNotifier {
   final AuthRepository _authRepository;
   final ProfileCacheService _profileCacheService;
@@ -28,6 +40,7 @@ class AuthProvider extends ChangeNotifier {
   bool _isOnboardingComplete = false;
   bool _isInitialized = false;
   bool _isOfflineMode = false;
+  DateTime? _lastSyncTime;
   StreamSubscription<UserEntity?>? _authStateSubscription;
   StreamSubscription<bool>? _connectivitySubscription;
 
@@ -45,6 +58,21 @@ class AuthProvider extends ChangeNotifier {
   bool get isOnboardingComplete => _isOnboardingComplete;
   bool get isInitialized => _isInitialized;
   bool get isOfflineMode => _isOfflineMode;
+
+  /// When the profile was last successfully fetched from the server.
+  /// Null if never synced or not authenticated.
+  DateTime? get lastSyncTime => _lastSyncTime;
+
+  /// Human-readable duration since last sync (e.g., "5 min ago", "2 hours ago").
+  /// Returns null if never synced.
+  String? get timeSinceLastSync {
+    if (_lastSyncTime == null) return null;
+    final diff = DateTime.now().difference(_lastSyncTime!);
+    if (diff.inMinutes < 1) return 'just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes} min ago';
+    if (diff.inHours < 24) return '${diff.inHours} hour${diff.inHours > 1 ? 's' : ''} ago';
+    return '${diff.inDays} day${diff.inDays > 1 ? 's' : ''} ago';
+  }
 
   /// Public method to trigger router refresh (e.g., after splash completes)
   void refresh() => notifyListeners();
@@ -96,6 +124,7 @@ class AuthProvider extends ChangeNotifier {
       if (fullUser != null) {
         _currentUser = fullUser;
         _isOfflineMode = false;
+        _lastSyncTime = DateTime.now();
         // Cache the profile for offline use
         await _profileCacheService.cacheProfile(fullUser);
         AppLogger.info('Profile fetched and cached');
@@ -132,6 +161,7 @@ class AuthProvider extends ChangeNotifier {
       if (fullUser != null) {
         _currentUser = fullUser;
         _isOfflineMode = false;
+        _lastSyncTime = DateTime.now();
         await _profileCacheService.cacheProfile(fullUser);
         notifyListeners();
         AppLogger.info('Profile refreshed after reconnection');
