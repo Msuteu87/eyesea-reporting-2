@@ -1,3 +1,12 @@
+# Codemagic CI/CD for Eyesea Reporting
+#
+# Required environment variables (in eyesea_secrets group):
+#   SUPABASE_URL, SUPABASE_ANON_KEY, MAPBOX_ACCESS_TOKEN
+#   GOOGLE_SERVICE_INFO_PLIST_BASE64  (iOS Firebase – base64 of GoogleService-Info.plist)
+#   GOOGLE_SERVICES_JSON_BASE64       (Android Firebase – base64 of google-services.json)
+#   GCLOUD_SERVICE_ACCOUNT_CREDENTIALS  (Google Play publish – service account JSON)
+# Android signing (eyesea_keystore): CM_KEYSTORE_PATH, CM_KEYSTORE_PASSWORD, CM_KEY_PASSWORD, CM_KEY_ALIAS
+
 workflows:
   ios-release:
     name: iOS Release
@@ -8,7 +17,7 @@ workflows:
       app_store_connect: eyeseaasc
     environment:
       groups:
-        - eyesea_secrets  # Must exist in Codemagic UI → App → Environment Variables
+        - eyesea_secrets
       ios_signing:
         distribution_type: app_store
         bundle_identifier: com.mariussuteu.eyesea.eyeseareporting
@@ -18,18 +27,18 @@ workflows:
     scripts:
       - name: Create empty .env file (asset placeholder)
         script: |
-          # Create empty .env file - actual secrets come from --dart-define
           touch .env
           echo "# Placeholder for flutter_dotenv - CI uses --dart-define" > .env
       - name: Set up Firebase config for iOS
         script: |
-          # Decode GoogleService-Info.plist from base64 environment variable
-          # Add GOOGLE_SERVICE_INFO_PLIST_BASE64 to Codemagic environment variables
-          if [ -n "$GOOGLE_SERVICE_INFO_PLIST_BASE64" ]; then
-            echo $GOOGLE_SERVICE_INFO_PLIST_BASE64 | base64 --decode > ios/Runner/GoogleService-Info.plist
-            echo "GoogleService-Info.plist created successfully"
+          if [ -z "$GOOGLE_SERVICE_INFO_PLIST_BASE64" ]; then
+            echo "Warning: GOOGLE_SERVICE_INFO_PLIST_BASE64 not set - using committed plist; push may not work"
           else
-            echo "Warning: GOOGLE_SERVICE_INFO_PLIST_BASE64 not set - push notifications may not work"
+            echo "$GOOGLE_SERVICE_INFO_PLIST_BASE64" | base64 --decode > ios/Runner/GoogleService-Info.plist || {
+              echo "ERROR: Failed to decode GOOGLE_SERVICE_INFO_PLIST_BASE64"
+              exit 1
+            }
+            echo "GoogleService-Info.plist injected successfully"
           fi
       - name: Clean and get Flutter dependencies
         script: |
@@ -77,21 +86,23 @@ workflows:
           echo "# Placeholder for flutter_dotenv - CI uses --dart-define" > .env
       - name: Set up Firebase config for Android
         script: |
-          # Decode google-services.json from base64 environment variable
-          # Add GOOGLE_SERVICES_JSON_BASE64 to Codemagic environment variables
-          if [ -n "$GOOGLE_SERVICES_JSON_BASE64" ]; then
-            echo $GOOGLE_SERVICES_JSON_BASE64 | base64 --decode > android/app/google-services.json
-            echo "google-services.json created successfully"
+          if [ -z "$GOOGLE_SERVICES_JSON_BASE64" ]; then
+            echo "Warning: GOOGLE_SERVICES_JSON_BASE64 not set - using committed google-services.json"
           else
-            echo "Warning: GOOGLE_SERVICES_JSON_BASE64 not set - push notifications may not work"
+            echo "$GOOGLE_SERVICES_JSON_BASE64" | base64 --decode > android/app/google-services.json || {
+              echo "ERROR: Failed to decode GOOGLE_SERVICES_JSON_BASE64"
+              exit 1
+            }
+            echo "google-services.json injected successfully"
           fi
       - name: Set up Android signing
         script: |
-          # Create key.properties from Codemagic environment variables
-          echo "storePassword=$CM_KEYSTORE_PASSWORD" >> android/key.properties
-          echo "keyPassword=$CM_KEY_PASSWORD" >> android/key.properties
-          echo "keyAlias=$CM_KEY_ALIAS" >> android/key.properties
-          echo "storeFile=$CM_KEYSTORE_PATH" >> android/key.properties
+          cat > android/key.properties << EOF
+          storePassword=$CM_KEYSTORE_PASSWORD
+          keyPassword=$CM_KEY_PASSWORD
+          keyAlias=$CM_KEY_ALIAS
+          storeFile=$CM_KEYSTORE_PATH
+          EOF
       - name: Get Flutter dependencies
         script: |
           flutter pub get
@@ -108,7 +119,7 @@ workflows:
       google_play:
         credentials: $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
         track: internal
-        submit_as_draft: true  # Required for apps not yet published
+        submit_as_draft: true
 
   all-platforms:
     name: Build All Platforms
@@ -137,20 +148,21 @@ workflows:
           echo "# Placeholder for flutter_dotenv - CI uses --dart-define" > .env
       - name: Set up Firebase config files
         script: |
-          # Decode Firebase config files from base64 environment variables
-          # iOS: GoogleService-Info.plist
-          if [ -n "$GOOGLE_SERVICE_INFO_PLIST_BASE64" ]; then
-            echo $GOOGLE_SERVICE_INFO_PLIST_BASE64 | base64 --decode > ios/Runner/GoogleService-Info.plist
-            echo "GoogleService-Info.plist created successfully"
+          if [ -z "$GOOGLE_SERVICE_INFO_PLIST_BASE64" ]; then
+            echo "Warning: GOOGLE_SERVICE_INFO_PLIST_BASE64 not set - using committed plist"
           else
-            echo "Warning: GOOGLE_SERVICE_INFO_PLIST_BASE64 not set - iOS push notifications may not work"
+            echo "$GOOGLE_SERVICE_INFO_PLIST_BASE64" | base64 --decode > ios/Runner/GoogleService-Info.plist || {
+              echo "ERROR: Failed to decode GOOGLE_SERVICE_INFO_PLIST_BASE64"; exit 1
+            }
+            echo "GoogleService-Info.plist injected"
           fi
-          # Android: google-services.json
-          if [ -n "$GOOGLE_SERVICES_JSON_BASE64" ]; then
-            echo $GOOGLE_SERVICES_JSON_BASE64 | base64 --decode > android/app/google-services.json
-            echo "google-services.json created successfully"
+          if [ -z "$GOOGLE_SERVICES_JSON_BASE64" ]; then
+            echo "Warning: GOOGLE_SERVICES_JSON_BASE64 not set - using committed google-services.json"
           else
-            echo "Warning: GOOGLE_SERVICES_JSON_BASE64 not set - Android push notifications may not work"
+            echo "$GOOGLE_SERVICES_JSON_BASE64" | base64 --decode > android/app/google-services.json || {
+              echo "ERROR: Failed to decode GOOGLE_SERVICES_JSON_BASE64"; exit 1
+            }
+            echo "google-services.json injected"
           fi
       - name: Clean and get Flutter dependencies
         script: |
@@ -173,11 +185,12 @@ workflows:
             --dart-define=MAPBOX_ACCESS_TOKEN=$MAPBOX_ACCESS_TOKEN
       - name: Set up Android signing
         script: |
-          # Create key.properties from Codemagic environment variables
-          echo "storePassword=$CM_KEYSTORE_PASSWORD" >> android/key.properties
-          echo "keyPassword=$CM_KEY_PASSWORD" >> android/key.properties
-          echo "keyAlias=$CM_KEY_ALIAS" >> android/key.properties
-          echo "storeFile=$CM_KEYSTORE_PATH" >> android/key.properties
+          cat > android/key.properties << EOF
+          storePassword=$CM_KEYSTORE_PASSWORD
+          keyPassword=$CM_KEY_PASSWORD
+          keyAlias=$CM_KEY_ALIAS
+          storeFile=$CM_KEYSTORE_PATH
+          EOF
       - name: Build Android
         script: |
           flutter build appbundle --release \
@@ -195,4 +208,4 @@ workflows:
       google_play:
         credentials: $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
         track: internal
-        submit_as_draft: true  # Required for apps not yet published
+        submit_as_draft: true

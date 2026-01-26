@@ -9,21 +9,24 @@ import FirebaseMessaging
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
-    // Configure Firebase
-    FirebaseApp.configure()
-
-    // Register for remote notifications
-    UNUserNotificationCenter.current().delegate = self
-    application.registerForRemoteNotifications()
+    // Configure Firebase only if GoogleService-Info.plist is in the app bundle.
+    // Avoids crash when plist is missing (e.g. CI didn't inject it).
+    if Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist") != nil {
+      FirebaseApp.configure()
+      UNUserNotificationCenter.current().delegate = self
+      application.registerForRemoteNotifications()
+    }
 
     GeneratedPluginRegistrant.register(with: self)
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
-  // Handle APNs token registration
+  // Handle APNs token registration (only used when Firebase is configured)
   override func application(_ application: UIApplication,
                             didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
-    Messaging.messaging().apnsToken = deviceToken
+    if Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist") != nil {
+      Messaging.messaging().apnsToken = deviceToken
+    }
     super.application(application, didRegisterForRemoteNotificationsWithDeviceToken: deviceToken)
   }
 }

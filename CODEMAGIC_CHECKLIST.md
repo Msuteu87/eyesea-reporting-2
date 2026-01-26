@@ -28,13 +28,41 @@ Use this checklist to track your progress setting up Codemagic CI/CD.
 - [ ] Upload keystore to Codemagic (name: `eyesea_keystore`)
 - [ ] Upload Google Play service account JSON to Codemagic
 
-## Environment Variables
+## Environment Variables (eyesea_secrets group)
 
-- [ ] Add `SUPABASE_URL` to Codemagic (mark as Secure)
-- [ ] Add `SUPABASE_ANON_KEY` to Codemagic (mark as Secure)
-- [ ] Add `MAPBOX_ACCESS_TOKEN` to Codemagic (mark as Secure)
-- [ ] Copy encrypted values from Codemagic
-- [ ] Update `codemagic.yaml` with encrypted values
+All variables below go in **Codemagic → your app → Environment variables**, variable group **`eyesea_secrets`**. Mark each as **Secure** (encrypted).
+
+| Name | Value | You have? |
+|------|--------|-----------|
+| `SUPABASE_URL` | `https://YOUR_PROJECT.supabase.co` | ✓ |
+| `SUPABASE_ANON_KEY` | Your Supabase anon key | ✓ |
+| `MAPBOX_ACCESS_TOKEN` | Your Mapbox token | ✓ |
+| `GOOGLE_SERVICES_JSON_BASE64` | Base64 of `android/app/google-services.json` | ✓ |
+| `GCLOUD_SERVICE_ACCOUNT_CREDENTIALS` | **Raw JSON** of Google Play service account key (not base64) | ✓ |
+| `GOOGLE_SERVICE_INFO_PLIST_BASE64` | Base64 of `ios/Runner/GoogleService-Info.plist` | **→ ADD** |
+
+### Add the missing variable
+
+1. **Name:** `GOOGLE_SERVICE_INFO_PLIST_BASE64`
+2. **Variable group:** `eyesea_secrets`
+3. **Value:** Base64-encode your `GoogleService-Info.plist`:
+
+   ```bash
+   base64 -i eyesea_reporting_2/ios/Runner/GoogleService-Info.plist | pbcopy
+   ```
+
+   Then paste the copied string as the value in Codemagic. Or on Linux:
+
+   ```bash
+   base64 -w0 eyesea_reporting_2/ios/Runner/GoogleService-Info.plist
+   ```
+
+4. **Secure:** Yes (checkbox)
+
+### Do **not** change
+
+- Keep `GCLOUD_SERVICE_ACCOUNT_CREDENTIALS` as-is (name and value). The YAML uses this.
+- Keep all other existing variables; no renames or value changes needed.
 
 ## Configuration
 
